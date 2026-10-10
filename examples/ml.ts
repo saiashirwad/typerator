@@ -86,11 +86,14 @@ export const infer = (expr: Expr): Check<Type> => {
     case "app":
       return check(function*() {
         const func = yield* infer(expr.func)
-        const arg = yield* infer(expr.arg)
+        const param = yield* fresh()
         const result = yield* fresh()
-        yield* unify(func, fn(arg, result)).context("function argument").at(
-          expr.arg.span
-        )
+        yield* unify(func, fn(param, result))
+          .context("function call")
+          .at(expr.func.span)
+        yield* unify(yield* infer(expr.arg), param)
+          .context("function argument")
+          .at(expr.arg.span)
         return result
       })
     case "let":

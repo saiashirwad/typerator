@@ -69,17 +69,17 @@ const substitute = (type: Type, mapping: ReadonlyMap<number, Type>): Type =>
     ? (mapping.get(type.id) ?? type)
     : con(type.name, ...type.args.map(arg => substitute(arg, mapping)))
 
+type Failure =
+  | { readonly kind: "mismatch" }
+  | { readonly kind: "infinite"; readonly id: number; readonly type: Type }
+
 const bind = (
   subst: Map<number, Type>,
   id: number,
   type: Type
-): string | undefined => {
+): Failure | undefined => {
   if (type.kind === "var" && type.id === id) return undefined
-  if (free(type).includes(id)) {
-    const names = new Map<number, string>()
-    const variable = show(tvar(id), names)
-    return `Infinite type: ${variable} occurs in ${show(type, names)}`
-  }
+  if (free(type).includes(id)) return { kind: "infinite", id, type }
   subst.set(id, type)
   return undefined
 }
@@ -88,14 +88,13 @@ const solve = (
   subst: Map<number, Type>,
   a: Type,
   b: Type
-): string | undefined => {
+): Failure | undefined => {
   const x = apply(subst, a)
   const y = apply(subst, b)
   if (x.kind === "var") return bind(subst, x.id, y)
   if (y.kind === "var") return bind(subst, y.id, x)
   if (x.name !== y.name || x.args.length !== y.args.length) {
-    const names = new Map<number, string>()
-    return `Cannot unify ${show(x, names)} with ${show(y, names)}`
+    return { kind: "mismatch" }
   }
   return solveAll(subst, x.args, y.args)
 }
@@ -104,7 +103,7 @@ const solveAll = (
   subst: Map<number, Type>,
   xs: readonly Type[],
   ys: readonly Type[]
-): string | undefined => {
+): Failure | undefined => {
   const [x, ...restX] = xs
   const [y, ...restY] = ys
   if (!x || !y) return undefined
@@ -148,10 +147,19 @@ export const fresh = (): Check<Type> =>
 export const resolve = (type: Type): Check<Type> =>
   new Check(({ state }) => ok(apply(state.subst, type)))
 
-export const unify = (a: Type, b: Type): Check<void> =>
+export const unify = (found: Type, expected: Type): Check<void> =>
   new Check(({ state }) => {
-    const message = solve(state.subst, a, b)
-    return message === undefined ? ok(undefined) : error(message)
+    const failure = solve(state.subst, found, expected)
+    if (failure === undefined) return ok(undefined)
+    const names = new Map<number, string>()
+    const display = (type: Type) => show(apply(state.subst, type), names)
+    if (failure.kind === "mismatch") {
+      return error(`Expected ${display(expected)}, found ${display(found)}`)
+    }
+    const variable = display(tvar(failure.id))
+    return error(
+      `Infinite type: ${variable} occurs in ${display(failure.type)}`
+    )
   })
 
 export const lookup = (name: string): Check<Scheme> =>

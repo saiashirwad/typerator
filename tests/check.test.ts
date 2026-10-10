@@ -76,7 +76,7 @@ describe("unify", () => {
     assert.equal(result.success, false)
     assert.equal(
       !result.success && result.error.message,
-      "Cannot unify int with bool"
+      "Expected bool -> int, found int -> int"
     )
   })
 

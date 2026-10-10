@@ -19,9 +19,9 @@ const cases: readonly [string, string][] = [
     "('a -> 'b) -> ('c -> 'a) -> 'c -> 'b"
   ],
   ["let id = fun x -> x in if id true then id 1 else 0", "int"],
-  ["fun x -> x + 1 == true", "Cannot unify int with bool"],
+  ["fun x -> x + 1 == true", "Expected int, found bool"],
   ["fun x -> x x", "Infinite type: 'a occurs in 'a -> 'b"],
-  ["fun f -> let a = f 1 in f true", "Cannot unify int with bool"],
+  ["fun f -> let a = f 1 in f true", "Expected int, found bool"],
   ["missing", "Unbound variable: missing"]
 ]
 
