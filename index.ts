@@ -1,39 +1,20 @@
 export {
   Check,
+  Reply,
+  Scope,
   attempt,
   check,
   choice,
   fail,
-  fresh,
-  generalize,
-  instantiate,
-  local,
-  lookup,
   pure,
-  resolve,
   run,
+  scoped,
   sequence,
-  unify,
-  type Env,
-  type Reply,
+  state,
+  within,
   type Result,
-  type Scope
+  type Scoped,
+  type State
 } from "./src/check.ts"
-
-export {
-  bool,
-  con,
-  empty,
-  extend,
-  fn,
-  free,
-  int,
-  mono,
-  record,
-  show,
-  tvar,
-  type Scheme,
-  type Type
-} from "./src/type.ts"
 
 export { render, type Diagnostic, type Span } from "./src/diagnostic.ts"

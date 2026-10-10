@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { show } from "typerator"
+import { show } from "typerator/unify"
 import { typeOf } from "../examples/ml/infer.ts"
 import { program } from "../examples/ml/parser.ts"
 

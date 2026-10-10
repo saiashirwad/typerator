@@ -1,5 +1,6 @@
 import type { Parser } from "parserator"
-import { render, show, type Result, type Type } from "typerator"
+import { render, type Result } from "typerator"
+import { show, type Type } from "typerator/unify"
 
 export const report = <T>(
   program: Parser<T>,

@@ -1,12 +1,24 @@
 import assert from "node:assert/strict"
 import { describe, test } from "node:test"
 import {
+  Check,
+  Reply,
   attempt,
-  bool,
   check,
   choice,
-  con,
   fail,
+  pure,
+  render,
+  run,
+  scoped,
+  sequence,
+  state,
+  within,
+  type Result
+} from "typerator"
+import {
+  bool,
+  con,
   fn,
   fresh,
   generalize,
@@ -15,19 +27,13 @@ import {
   local,
   lookup,
   mono,
-  pure,
   record,
-  render,
   resolve,
-  run,
-  sequence,
   show,
   tvar,
   unify,
-  type Check,
-  type Result,
   type Type
-} from "typerator"
+} from "typerator/unify"
 
 const typeOf = (checker: Check<Type>) =>
   run(
@@ -83,6 +89,30 @@ describe("combinators", () => {
   test("sequence stops at the first failure", () => {
     const result = run(sequence([pure(1), fail("boom"), pure(3)]))
     assert.equal(!result.success && result.errors[0].message, "boom")
+  })
+})
+
+describe("kit state", () => {
+  const counter = state(() => ({ count: 0 }), ({ count }) => ({ count }))
+  const depth = scoped(0)
+  const tick = new Check(scope => Reply.ok(++scope.get(counter).count))
+  const current = new Check(scope => Reply.ok(scope.get(depth)))
+
+  test("state persists across steps and attempt restores it", () => {
+    const result = run(check(function*() {
+      yield* tick
+      yield* choice(tick.flatMap(() => fail("boom")), pure(undefined))
+      return yield* tick
+    }))
+    assert.deepEqual(result, { success: true, value: 2 })
+  })
+
+  test("within changes a scoped value only for its body", () => {
+    const result = run(check(function*() {
+      const inside = yield* within(depth, n => n + 1, current)
+      return [inside, yield* current]
+    }))
+    assert.deepEqual(result, { success: true, value: [1, 0] })
   })
 })
 

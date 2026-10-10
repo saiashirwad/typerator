@@ -9,19 +9,8 @@ import {
   regex,
   type Parser
 } from "parserator"
-import {
-  bool,
-  check,
-  choice,
-  con,
-  int,
-  pure,
-  run,
-  unify,
-  type Check,
-  type Span,
-  type Type
-} from "typerator"
+import { check, choice, pure, run, type Check, type Span } from "typerator"
+import { bool, con, int, unify, type Type } from "typerator/unify"
 import { keyword, located, spaces, symbol, token } from "./lexer.ts"
 import { report } from "./report.ts"
 

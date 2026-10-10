@@ -1,4 +1,4 @@
-import { con, fn, tvar, type Env, type Type } from "typerator"
+import { con, fn, tvar, type Env, type Type } from "typerator/unify"
 import { report } from "../report.ts"
 import { prelude, typeOf } from "./infer.ts"
 import { program } from "./parser.ts"

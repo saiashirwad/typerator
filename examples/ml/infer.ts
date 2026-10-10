@@ -1,7 +1,6 @@
+import { check, fail, pure, run, sequence, type Check } from "typerator"
 import {
   bool,
-  check,
-  fail,
   fn,
   fresh,
   generalize,
@@ -10,16 +9,12 @@ import {
   local,
   lookup,
   mono,
-  pure,
   record,
   resolve,
-  run,
-  sequence,
   unify,
-  type Check,
   type Env,
   type Type
-} from "typerator"
+} from "typerator/unify"
 import type { Expr, TypeExpr } from "./syntax.ts"
 
 const expect = (expr: Expr, expected: Type, label: string) =>
@@ -151,4 +146,4 @@ export const prelude: Env = new Map([
 ])
 
 export const typeOf = (expr: Expr, env = prelude) =>
-  run(infer(expr).flatMap(resolve), env)
+  run(local(env, infer(expr).flatMap(resolve)))
