@@ -3,7 +3,10 @@ import {
   choice,
   commit,
   eof,
+  literal,
   many,
+  notFollowedBy,
+  optional,
   parser,
   postfix,
   precedence,
@@ -20,10 +23,11 @@ import {
   symbol,
   token
 } from "../lexer.ts"
-import { Expr } from "./syntax.ts"
+import { Expr, TypeExpr } from "./syntax.ts"
 
 const name = identifier([
   "let",
+  "rec",
   "in",
   "fun",
   "if",
@@ -35,6 +39,33 @@ const name = identifier([
 
 const call = (func: string) => (left: Expr, right: Expr) =>
   Expr.app(Expr.var(func), left, right)
+
+const type: Parser<TypeExpr> = recursive<TypeExpr>(type => {
+  const field = parser(function*() {
+    const label = yield* name
+    yield* symbol(":")
+    return [label, yield* type] as const
+  })
+
+  const atom = located(
+    choice(
+      token(regex(/'[a-z]\w*/)).map(TypeExpr.var),
+      name.map(TypeExpr.name),
+      between(symbol("("), symbol(")"), type),
+      between(symbol("{"), symbol("}"), sepBy(field, symbol(","))).map(
+        TypeExpr.record
+      )
+    )
+  )
+
+  return located(
+    precedence(atom, [
+      { associativity: "right", operators: [[symbol("->"), TypeExpr.fn]] }
+    ])
+  )
+})
+
+const minus = token(literal("-").zipLeft(notFollowedBy(literal(">"))))
 
 const expr: Parser<Expr> = recursive<Expr>(expr => {
   const field = parser(function*() {
@@ -49,7 +80,13 @@ const expr: Parser<Expr> = recursive<Expr>(expr => {
       keyword("true").map(() => Expr.lit(true)),
       keyword("false").map(() => Expr.lit(false)),
       name.map(Expr.var),
-      between(symbol("("), symbol(")"), expr),
+      parser(function*() {
+        yield* symbol("(")
+        const inner = yield* expr
+        const annotation = yield* optional(symbol(":").zipRight(type))
+        yield* symbol(")")
+        return annotation ? Expr.annot(inner, annotation) : inner
+      }),
       between(symbol("{"), symbol("}"), sepBy(field, symbol(","))).map(
         Expr.record
       )
@@ -75,7 +112,11 @@ const expr: Parser<Expr> = recursive<Expr>(expr => {
 
   const operators = located(
     precedence(application, [
-      { associativity: "left", operators: [[symbol("+"), call("add")]] },
+      { associativity: "left", operators: [[symbol("*"), call("mul")]] },
+      {
+        associativity: "left",
+        operators: [[symbol("+"), call("add")], [minus, call("sub")]]
+      },
       { associativity: "left", operators: [[symbol("=="), call("eq")]] }
     ])
   )
@@ -94,11 +135,13 @@ const expr: Parser<Expr> = recursive<Expr>(expr => {
     parser(function*() {
       yield* keyword("let")
       yield* commit()
+      const recursive = yield* optional(keyword("rec"))
       const id = yield* name
       yield* symbol("=")
       const value = yield* expr
       yield* keyword("in")
-      return Expr.let(id, value, yield* expr)
+      const body = yield* expr
+      return recursive ? Expr.rec(id, value, body) : Expr.let(id, value, body)
     })
   )
 

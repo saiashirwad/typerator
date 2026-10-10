@@ -1,6 +1,7 @@
 import {
   bool,
   check,
+  fail,
   fn,
   fresh,
   generalize,
@@ -13,12 +14,13 @@ import {
   record,
   resolve,
   run,
+  sequence,
   unify,
   type Check,
   type Env,
   type Type
 } from "typerator"
-import type { Expr } from "./syntax.ts"
+import type { Expr, TypeExpr } from "./syntax.ts"
 
 const expect = (expr: Expr, expected: Type, label: string) =>
   infer(expr)
@@ -26,6 +28,40 @@ const expect = (expr: Expr, expected: Type, label: string) =>
     .context(label)
     .at(expr.span)
     .recover()
+
+const builtins: ReadonlyMap<string, Type> = new Map([
+  ["int", int],
+  ["bool", bool]
+])
+
+const annotation = (
+  type: TypeExpr,
+  vars = new Map<string, Type>()
+): Check<Type> => {
+  switch (type.kind) {
+    case "name": {
+      const known = builtins.get(type.name)
+      return known
+        ? pure(known)
+        : fail(`Unknown type ${type.name}`).at(type.span)
+    }
+    case "var":
+      return check(function*() {
+        const known = vars.get(type.name) ?? (yield* fresh())
+        vars.set(type.name, known)
+        return known
+      })
+    case "fn":
+      return sequence([annotation(type.from, vars), annotation(type.to, vars)])
+        .map(([from, to]) => fn(from, to))
+    case "record":
+      return sequence(
+        type.fields.map(([label, field]) =>
+          annotation(field, vars).map(type => [label, type] as const)
+        )
+      ).map(fields => record(Object.fromEntries(fields)))
+  }
+}
 
 export const infer = (expr: Expr): Check<Type> => {
   switch (expr.kind) {
@@ -80,6 +116,23 @@ export const infer = (expr: Expr): Check<Type> => {
           .context(`let ${expr.name}`)
         return yield* local(expr.name, value, infer(expr.body))
       })
+    case "rec":
+      return check(function*() {
+        const self = yield* fresh()
+        yield* local(
+          expr.name,
+          mono(self),
+          expect(expr.value, self, `let rec ${expr.name}`)
+        )
+        const scheme = yield* generalize(self)
+        return yield* local(expr.name, scheme, infer(expr.body))
+      })
+    case "annot":
+      return check(function*() {
+        const type = yield* annotation(expr.type)
+        yield* expect(expr.expr, type, "annotation")
+        return type
+      })
     case "if":
       return check(function*() {
         yield* expect(expr.cond, bool, "if condition")
@@ -92,6 +145,8 @@ export const infer = (expr: Expr): Check<Type> => {
 
 export const prelude: Env = new Map([
   ["add", mono(fn(int, fn(int, int)))],
+  ["sub", mono(fn(int, fn(int, int)))],
+  ["mul", mono(fn(int, fn(int, int)))],
   ["eq", mono(fn(int, fn(int, bool)))]
 ])
 

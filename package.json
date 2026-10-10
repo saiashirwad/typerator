@@ -12,7 +12,7 @@
     "test": "node --test tests/*.test.ts",
     "fmt": "dprint fmt",
     "fmt:check": "dprint check",
-    "examples": "node examples/arith.ts && node examples/ml/polymorphism.ts && node examples/ml/errors.ts && node examples/ml/lists.ts && node examples/ml/records.ts"
+    "examples": "node examples/arith.ts && node examples/ml/polymorphism.ts && node examples/ml/errors.ts && node examples/ml/lists.ts && node examples/ml/records.ts && node examples/ml/recursion.ts && node examples/ml/annotations.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

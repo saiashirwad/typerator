@@ -36,6 +36,15 @@ const cases: readonly [string, string][] = [
     "Expected { x : int | 'a }, found { y : int }"
   ],
   [
+    "let rec fact = fun n -> if n == 0 then 1 else n * fact (n - 1) in fact",
+    "int -> int"
+  ],
+  ["let rec loop = fun x -> loop x in loop", "'a -> 'b"],
+  ["(fun x -> x : 'a -> 'a)", "'a -> 'a"],
+  ["(fun r -> r.x : { x : int } -> int)", "{ x : int } -> int"],
+  ["(true : int)", "Expected int, found bool"],
+  ["(1 : string)", "Unknown type string"],
+  [
     "let f = fun x -> x + true in f false",
     "Expected int, found bool; Expected int, found bool"
   ]
