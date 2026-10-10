@@ -1,8 +1,10 @@
 import assert from "node:assert/strict"
 import { describe, test } from "node:test"
 import {
+  attempt,
   bool,
   check,
+  choice,
   con,
   fail,
   fn,
@@ -80,6 +82,36 @@ describe("combinators", () => {
   test("sequence stops at the first failure", () => {
     const result = run(sequence([pure(1), fail("boom"), pure(3)]))
     assert.equal(!result.success && result.error.message, "boom")
+  })
+})
+
+describe("backtracking", () => {
+  test("attempt undoes bindings made before a failure", () => {
+    const result = typeOf(check(function*() {
+      const a = yield* fresh()
+      const tried = attempt(check(function*() {
+        yield* unify(a, int)
+        yield* fail("boom")
+      }))
+      yield* choice(tried, pure(undefined))
+      yield* unify(a, bool)
+      return a
+    }))
+    assert.equal(shown(result), "bool")
+  })
+
+  test("choice takes the first alternative that succeeds", () => {
+    const result = typeOf(check(function*() {
+      const a = yield* fresh()
+      yield* choice(unify(fn(a, a), int), unify(a, bool), unify(a, int))
+      return a
+    }))
+    assert.equal(shown(result), "bool")
+  })
+
+  test("choice reports the first error when every alternative fails", () => {
+    const result = run(choice(fail("first"), fail("second")))
+    assert.equal(!result.success && result.error.message, "first")
   })
 })
 

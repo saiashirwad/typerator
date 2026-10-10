@@ -1,6 +1,8 @@
 export {
   Check,
+  attempt,
   check,
+  choice,
   fail,
   fresh,
   generalize,

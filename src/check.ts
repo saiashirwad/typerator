@@ -11,9 +11,11 @@ export type Result<A> =
 
 export type Env = ReadonlyMap<string, Scheme>
 
+type State = { readonly subst: Map<number, Type>; next: number }
+
 export type Scope = {
   readonly env: Env
-  readonly state: { readonly subst: Map<number, Type>; next: number }
+  readonly state: State
 }
 
 export class Check<A> {
@@ -154,6 +156,32 @@ export const sequence = <const Checks extends readonly Check<unknown>[]>(
     const values: unknown[] = []
     for (const checker of checks) values.push(yield* checker)
     return values as Values<Checks>
+  })
+
+const restore = (state: State, saved: State) => {
+  state.subst.clear()
+  for (const [id, type] of saved.subst) state.subst.set(id, type)
+  state.next = saved.next
+}
+
+export const attempt = <A>(checker: Check<A>): Check<A> =>
+  new Check(scope => {
+    const saved = { subst: new Map(scope.state.subst), next: scope.state.next }
+    const reply = checker.step(scope)
+    if (!reply.ok) restore(scope.state, saved)
+    return reply
+  })
+
+export const choice = <A>(
+  first: Check<A>,
+  ...rest: readonly Check<A>[]
+): Check<A> =>
+  new Check(scope => {
+    const reply = attempt(first).step(scope)
+    const [next, ...others] = rest
+    if (reply.ok || !next) return reply
+    const fallback = choice(next, ...others).step(scope)
+    return fallback.ok ? fallback : reply
   })
 
 export const run = <A>(checker: Check<A>, env: Env = new Map()): Result<A> => {
