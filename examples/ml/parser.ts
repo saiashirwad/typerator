@@ -3,49 +3,44 @@ import {
   choice,
   commit,
   eof,
-  fail,
-  literal,
   many,
-  notFollowedBy,
   parser,
   precedence,
   recursive,
   regex,
-  succeed,
   type Parser
 } from "parserator"
-import { app, if_, lam, let_, lit, v, type Expr } from "./ml.ts"
+import {
+  identifier,
+  keyword,
+  located,
+  spaces,
+  symbol,
+  token
+} from "../lexer.ts"
+import { Expr } from "./syntax.ts"
 
-const keywords = ["let", "in", "fun", "if", "then", "else", "true", "false"]
-
-const spaces = regex(/\s*/)
-
-const token = <T>(inner: Parser<T>): Parser<T> => spaces.zipRight(inner)
-
-const symbol = (text: string) => token(literal(text))
-
-const keyword = (word: string) =>
-  token(literal(word).zipLeft(notFollowedBy(regex(/[\w']/))))
-
-const name = token(
-  regex(/[a-z_][\w']*/).flatMap(word =>
-    keywords.includes(word) ? fail(`${word} is a keyword`) : succeed(word)
-  )
-).expected("name")
-
-const located = (inner: Parser<Expr>): Parser<Expr> =>
-  spaces.zipRight(inner.withSpan((expr, span) => ({ ...expr, span })))
+const name = identifier([
+  "let",
+  "in",
+  "fun",
+  "if",
+  "then",
+  "else",
+  "true",
+  "false"
+])
 
 const call = (func: string) => (left: Expr, right: Expr) =>
-  app(v(func), left, right)
+  Expr.app(Expr.var(func), left, right)
 
 const expr: Parser<Expr> = recursive<Expr>(expr => {
   const atom = located(
     choice(
-      token(regex(/\d+/)).map(digits => lit(Number(digits))),
-      keyword("true").map(() => lit(true)),
-      keyword("false").map(() => lit(false)),
-      name.map(v),
+      token(regex(/\d+/)).map(digits => Expr.lit(Number(digits))),
+      keyword("true").map(() => Expr.lit(true)),
+      keyword("false").map(() => Expr.lit(false)),
+      name.map(Expr.var),
       between(symbol("("), symbol(")"), expr)
     )
   )
@@ -54,7 +49,7 @@ const expr: Parser<Expr> = recursive<Expr>(expr => {
     parser(function*() {
       const func = yield* atom
       const args = yield* many(atom)
-      return app(func, ...args)
+      return Expr.app(func, ...args)
     })
   )
 
@@ -71,7 +66,7 @@ const expr: Parser<Expr> = recursive<Expr>(expr => {
       yield* commit()
       const param = yield* name
       yield* symbol("->")
-      return lam(param, yield* expr)
+      return Expr.lam(param, yield* expr)
     })
   )
 
@@ -83,7 +78,7 @@ const expr: Parser<Expr> = recursive<Expr>(expr => {
       yield* symbol("=")
       const value = yield* expr
       yield* keyword("in")
-      return let_(id, value, yield* expr)
+      return Expr.let(id, value, yield* expr)
     })
   )
 
@@ -95,7 +90,7 @@ const expr: Parser<Expr> = recursive<Expr>(expr => {
       yield* keyword("then")
       const then = yield* expr
       yield* keyword("else")
-      return if_(cond, then, yield* expr)
+      return Expr.if(cond, then, yield* expr)
     })
   )
 

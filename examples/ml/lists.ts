@@ -1,5 +1,7 @@
 import { con, fn, tvar, type Env, type Type } from "typerator"
-import { app, lam, lit, prelude, report, v } from "./ml.ts"
+import { report } from "../report.ts"
+import { prelude, typeOf } from "./infer.ts"
+import { program } from "./parser.ts"
 
 const list = (item: Type) => con("list", item)
 const pair = (first: Type, second: Type) => con("pair", first, second)
@@ -15,15 +17,10 @@ const env: Env = new Map([
   ["pair", { vars: [0, 1], type: fn(a, fn(b, pair(a, b))) }]
 ])
 
-const numbers = app(v("cons"), lit(1), app(v("cons"), lit(2), v("nil")))
-
-report(
-  [
-    v("nil"),
-    numbers,
-    app(v("map"), lam("n", app(v("eq"), v("n"), lit(0))), numbers),
-    app(v("map"), lam("n", app(v("pair"), v("n"), lit(true))), numbers),
-    app(v("cons"), lit(true), numbers)
-  ],
-  env
-)
+report(program, expr => typeOf(expr, env), [
+  "nil",
+  "cons 1 (cons 2 nil)",
+  "map (fun n -> n == 0) (cons 1 (cons 2 nil))",
+  "map (fun n -> pair n true) (cons 1 nil)",
+  "cons true (cons 1 nil)"
+])
