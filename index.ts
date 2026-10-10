@@ -10,6 +10,7 @@ export {
   pure,
   resolve,
   run,
+  sequence,
   unify,
   type Env,
   type Reply,

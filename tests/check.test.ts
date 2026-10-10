@@ -17,6 +17,7 @@ import {
   render,
   resolve,
   run,
+  sequence,
   show,
   tvar,
   unify,
@@ -58,6 +59,27 @@ describe("check", () => {
     )
     assert.equal(result.success, false)
     assert.deepEqual(seen, [1])
+  })
+})
+
+describe("combinators", () => {
+  test("map transforms the value", () => {
+    assert.deepEqual(run(pure(2).map(n => n * 3)), { success: true, value: 6 })
+  })
+
+  test("flatMap chains checks", () => {
+    const result = typeOf(fresh().flatMap(a => unify(a, int).map(() => a)))
+    assert.equal(shown(result), "int")
+  })
+
+  test("sequence collects values as a tuple", () => {
+    const result = run(sequence([pure(1), pure("two"), pure(true)]))
+    assert.deepEqual(result, { success: true, value: [1, "two", true] })
+  })
+
+  test("sequence stops at the first failure", () => {
+    const result = run(sequence([pure(1), fail("boom"), pure(3)]))
+    assert.equal(!result.success && result.error.message, "boom")
   })
 })
 

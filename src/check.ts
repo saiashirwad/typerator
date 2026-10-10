@@ -27,6 +27,20 @@ export class Check<A> {
     return (yield this) as A
   }
 
+  map<B>(f: (value: A) => B): Check<B> {
+    return new Check(scope => {
+      const reply = this.step(scope)
+      return reply.ok ? ok(f(reply.value)) : reply
+    })
+  }
+
+  flatMap<B>(f: (value: A) => Check<B>): Check<B> {
+    return new Check(scope => {
+      const reply = this.step(scope)
+      return reply.ok ? f(reply.value).step(scope) : reply
+    })
+  }
+
   context(label: string): Check<A> {
     return new Check(scope => {
       const reply = this.step(scope)
@@ -127,6 +141,19 @@ export const check = <A>(
       current = iterator.next(reply.value)
     }
     return ok(current.value)
+  })
+
+type Values<Checks extends readonly Check<unknown>[]> = {
+  -readonly [K in keyof Checks]: Checks[K] extends Check<infer A> ? A : never
+}
+
+export const sequence = <const Checks extends readonly Check<unknown>[]>(
+  checks: Checks
+): Check<Values<Checks>> =>
+  check(function*() {
+    const values: unknown[] = []
+    for (const checker of checks) values.push(yield* checker)
+    return values as Values<Checks>
   })
 
 export const run = <A>(checker: Check<A>, env: Env = new Map()): Result<A> => {
