@@ -1,25 +1,26 @@
-import { check, pure, run, type Check } from "typerator"
+import { bind, check, lookup, pure, run, type Check } from "typerator"
 import {
-  and,
-  bool,
   constrain,
-  fn,
   fresh,
   generalize,
   instantiate,
+  env,
+  resolve,
+  type Env
+} from "./subtype.ts"
+import type { Expr } from "./syntax.ts"
+import {
+  and,
+  bool,
+  fn,
   int,
-  local,
-  lookup,
   mono,
   not,
   or,
   record,
-  resolve,
   tag,
-  type Env,
   type Type
-} from "typerator/subtype"
-import type { Expr } from "./syntax.ts"
+} from "./type.ts"
 
 const expect = (expr: Expr, expected: Type, label: string) =>
   infer(expr)
@@ -37,13 +38,13 @@ const fields = (entries: readonly (readonly [string, Expr])[]) =>
 
 const refine = (scrutinee: Expr, type: Type, body: Expr) =>
   scrutinee.kind === "var"
-    ? local(scrutinee.name, mono(type), infer(body))
+    ? bind(env, [[scrutinee.name, mono(type)]], infer(body))
     : infer(body)
 
 export const infer = (expr: Expr): Check<Type> => {
   switch (expr.kind) {
     case "var":
-      return lookup(expr.name)
+      return lookup(env, expr.name)
         .flatMap(instantiate)
         .at(expr.span)
         .recover(fresh())
@@ -52,7 +53,11 @@ export const infer = (expr: Expr): Check<Type> => {
     case "lam":
       return check(function*() {
         const param = yield* fresh()
-        const body = yield* local(expr.param, mono(param), infer(expr.body))
+        const body = yield* bind(
+          env,
+          [[expr.param, mono(param)]],
+          infer(expr.body)
+        )
         return fn(param, body)
       })
     case "app":
@@ -85,7 +90,7 @@ export const infer = (expr: Expr): Check<Type> => {
       return check(function*() {
         const value = yield* generalize(infer(expr.value))
           .context(`let ${expr.name}`)
-        return yield* local(expr.name, value, infer(expr.body))
+        return yield* bind(env, [[expr.name, value]], infer(expr.body))
       })
     case "if":
       return check(function*() {
@@ -115,4 +120,4 @@ export const prelude: Env = new Map([
 ])
 
 export const typeOf = (expr: Expr) =>
-  run(local(prelude, infer(expr).flatMap(resolve)))
+  run(bind(env, prelude, infer(expr).flatMap(resolve)))

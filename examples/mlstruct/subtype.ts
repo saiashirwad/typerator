@@ -1,4 +1,4 @@
-import { Check, Reply, scoped, state, within } from "../check.ts"
+import { check, fail, get, scoped, state, within, type Check } from "typerator"
 import {
   and,
   anything,
@@ -42,7 +42,7 @@ const solver = state<Solver>(
 
 const level = scoped(0)
 
-const env = scoped<Env>(new Map())
+export const env = scoped<Env>(new Map())
 
 const variable = (current: Solver, at: number): Var => {
   const id = current.next++
@@ -431,60 +431,42 @@ const normalize = (type: Type): Type => {
 }
 
 export const fresh = (): Check<Type> =>
-  new Check(scope => Reply.ok(variable(scope.get(solver), scope.get(level))))
+  check(function*() {
+    return variable(yield* get(solver), yield* get(level))
+  })
 
 export const constrain = (found: Type, expected: Type): Check<void> =>
-  new Check(scope => {
-    const solving = { solver: scope.get(solver), seen: new Set<string>() }
+  check(function*() {
+    const solving = { solver: yield* get(solver), seen: new Set<string>() }
     const failure = solve(solving, found, expected)
-    if (!failure) return Reply.ok(undefined)
+    if (!failure) return
     const names = new Map<number, string>()
     const expectedType = show(failure.expected, names)
-    return Reply.error(
+    return yield* fail(
       `Expected ${expectedType}, found ${show(failure.found, names)}`
     )
   })
 
 export const resolve = (type: Type): Check<Type> =>
-  new Check(scope => {
-    const coalesced = coalesce(scope.get(solver), type, true)
+  get(solver).map(current => {
+    const coalesced = coalesce(current, type, true)
     const seen = polarities(coalesced, true, new Map())
     const both = new Set(
       [...seen].filter(([, polarity]) => polarity.size === 2).map(([id]) => id)
     )
-    return Reply.ok(normalize(prune(coalesced, true, both)))
+    return normalize(prune(coalesced, true, both))
   })
-
-export const lookup = (name: string): Check<Scheme> =>
-  new Check(scope => {
-    const scheme = scope.get(env).get(name)
-    return scheme ? Reply.ok(scheme) : Reply.error(`Unbound variable: ${name}`)
-  })
-
-export function local<A>(name: string, scheme: Scheme, body: Check<A>): Check<A>
-export function local<A>(bindings: Env, body: Check<A>): Check<A>
-export function local<A>(
-  ...args:
-    | readonly [string, Scheme, Check<A>]
-    | readonly [Env, Check<A>]
-): Check<A> {
-  const [bindings, body] = args.length === 3
-    ? [new Map([[args[0], args[1]]]), args[2]]
-    : args
-  return within(env, current => new Map([...current, ...bindings]), body)
-}
 
 export const generalize = (body: Check<Type>): Check<Scheme> =>
-  new Check(scope => {
-    const at = scope.get(level)
-    return within(level, n => n + 1, body)
-      .map(type => ({ level: at, type }))
-      .step(scope)
+  check(function*() {
+    const at = yield* get(level)
+    const type = yield* within(level, n => n + 1, body)
+    return { level: at, type }
   })
 
 export const instantiate = (scheme: Scheme): Check<Type> =>
-  new Check(scope =>
-    Reply.ok(
-      freshen(scope.get(solver), scheme.type, scheme.level, scope.get(level))
-    )
-  )
+  check(function*() {
+    const current = yield* get(solver)
+    const at = yield* get(level)
+    return freshen(current, scheme.type, scheme.level, at)
+  })
