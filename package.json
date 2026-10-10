@@ -9,6 +9,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts",
     "fmt": "dprint fmt",
     "fmt:check": "dprint check",
     "examples": "node examples/arith.ts && node examples/polymorphism.ts && node examples/errors.ts && node examples/lists.ts && node examples/parsed.ts"
