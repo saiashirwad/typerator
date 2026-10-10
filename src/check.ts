@@ -1,0 +1,187 @@
+import type { Diagnostic, Span } from "./diagnostic.ts"
+import { con, free, show, tvar, type Scheme, type Type } from "./type.ts"
+
+export type Reply<A> =
+  | { readonly ok: true; readonly value: A }
+  | { readonly ok: false; readonly error: Diagnostic }
+
+export type Result<A> =
+  | { readonly success: true; readonly value: A }
+  | { readonly success: false; readonly error: Diagnostic }
+
+export type Env = ReadonlyMap<string, Scheme>
+
+export type Context = {
+  readonly env: Env
+  readonly state: { readonly subst: Map<number, Type>; next: number }
+}
+
+export class Check<A> {
+  readonly step: (context: Context) => Reply<A>
+
+  constructor(step: (context: Context) => Reply<A>) {
+    this.step = step
+  }
+
+  *[Symbol.iterator](): Generator<Check<A>, A, unknown> {
+    return (yield this) as A
+  }
+
+  context(label: string): Check<A> {
+    return new Check(context => {
+      const reply = this.step(context)
+      return reply.ok
+        ? reply
+        : {
+          ok: false,
+          error: { ...reply.error, context: [...reply.error.context, label] }
+        }
+    })
+  }
+
+  at(span: Span | undefined): Check<A> {
+    return new Check(context => {
+      const reply = this.step(context)
+      return reply.ok || !span || reply.error.span
+        ? reply
+        : { ok: false, error: { ...reply.error, span } }
+    })
+  }
+}
+
+const ok = <A>(value: A): Reply<A> => ({ ok: true, value })
+
+const error = (message: string): Reply<never> => ({
+  ok: false,
+  error: { message, context: [] }
+})
+
+const apply = (subst: ReadonlyMap<number, Type>, type: Type): Type => {
+  if (type.kind === "con") {
+    return con(type.name, ...type.args.map(arg => apply(subst, arg)))
+  }
+  const bound = subst.get(type.id)
+  return bound ? apply(subst, bound) : type
+}
+
+const substitute = (type: Type, mapping: ReadonlyMap<number, Type>): Type =>
+  type.kind === "var"
+    ? (mapping.get(type.id) ?? type)
+    : con(type.name, ...type.args.map(arg => substitute(arg, mapping)))
+
+const bind = (
+  subst: Map<number, Type>,
+  id: number,
+  type: Type
+): string | undefined => {
+  if (type.kind === "var" && type.id === id) return undefined
+  if (free(type).includes(id)) {
+    const names = new Map<number, string>()
+    const variable = show(tvar(id), names)
+    return `Infinite type: ${variable} occurs in ${show(type, names)}`
+  }
+  subst.set(id, type)
+  return undefined
+}
+
+const solve = (
+  subst: Map<number, Type>,
+  a: Type,
+  b: Type
+): string | undefined => {
+  const x = apply(subst, a)
+  const y = apply(subst, b)
+  if (x.kind === "var") return bind(subst, x.id, y)
+  if (y.kind === "var") return bind(subst, y.id, x)
+  if (x.name !== y.name || x.args.length !== y.args.length) {
+    const names = new Map<number, string>()
+    return `Cannot unify ${show(x, names)} with ${show(y, names)}`
+  }
+  return solveAll(subst, x.args, y.args)
+}
+
+const solveAll = (
+  subst: Map<number, Type>,
+  xs: readonly Type[],
+  ys: readonly Type[]
+): string | undefined => {
+  const [x, ...restX] = xs
+  const [y, ...restY] = ys
+  if (!x || !y) return undefined
+  return solve(subst, x, y) ?? solveAll(subst, restX, restY)
+}
+
+const freeInScheme = (subst: ReadonlyMap<number, Type>, scheme: Scheme) =>
+  free(scheme.type)
+    .filter(id => !scheme.vars.includes(id))
+    .flatMap(id => free(apply(subst, tvar(id))))
+
+export const check = <A>(
+  body: () => Generator<Check<unknown>, A, unknown>
+): Check<A> =>
+  new Check(context => {
+    const iterator = body()
+    let current = iterator.next()
+    while (!current.done) {
+      const reply = current.value.step(context)
+      if (!reply.ok) return reply
+      current = iterator.next(reply.value)
+    }
+    return ok(current.value)
+  })
+
+export const run = <A>(checker: Check<A>, env: Env = new Map()): Result<A> => {
+  const reply = checker.step({ env, state: { subst: new Map(), next: 0 } })
+  return reply.ok
+    ? { success: true, value: reply.value }
+    : { success: false, error: reply.error }
+}
+
+export const pure = <A>(value: A): Check<A> => new Check(() => ok(value))
+
+export const fail = (message: string): Check<never> =>
+  new Check(() => error(message))
+
+export const fresh = (): Check<Type> =>
+  new Check(({ state }) => ok(tvar(state.next++)))
+
+export const resolve = (type: Type): Check<Type> =>
+  new Check(({ state }) => ok(apply(state.subst, type)))
+
+export const unify = (a: Type, b: Type): Check<void> =>
+  new Check(({ state }) => {
+    const message = solve(state.subst, a, b)
+    return message === undefined ? ok(undefined) : error(message)
+  })
+
+export const lookup = (name: string): Check<Scheme> =>
+  new Check(({ env }) => {
+    const scheme = env.get(name)
+    return scheme ? ok(scheme) : error(`Unbound variable: ${name}`)
+  })
+
+export const local = <A>(
+  name: string,
+  scheme: Scheme,
+  body: Check<A>
+): Check<A> =>
+  new Check(context =>
+    body.step({ ...context, env: new Map(context.env).set(name, scheme) })
+  )
+
+export const generalize = (type: Type): Check<Scheme> =>
+  new Check(({ env, state }) => {
+    const bound = new Set(
+      [...env.values()].flatMap(scheme => freeInScheme(state.subst, scheme))
+    )
+    const resolved = apply(state.subst, type)
+    const vars = [...new Set(free(resolved))].filter(id => !bound.has(id))
+    return ok({ vars, type: resolved })
+  })
+
+export const instantiate = (scheme: Scheme): Check<Type> =>
+  check(function*() {
+    const mapping = new Map<number, Type>()
+    for (const id of scheme.vars) mapping.set(id, yield* fresh())
+    return substitute(scheme.type, mapping)
+  })

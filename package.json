@@ -1,0 +1,25 @@
+{
+  "name": "typerator",
+  "version": "0.0.0",
+  "description": "Generator-based combinators for writing type checkers",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "fmt": "dprint fmt",
+    "fmt:check": "dprint check",
+    "examples": "node examples/arith.ts && node examples/polymorphism.ts && node examples/errors.ts && node examples/lists.ts && node examples/parsed.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "dprint": "^0.61.1",
+    "parserator": "0.3.0",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
