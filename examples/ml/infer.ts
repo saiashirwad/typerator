@@ -24,11 +24,15 @@ const expect = (expr: Expr, expected: Type, label: string) =>
     .flatMap(found => unify(found, expected))
     .context(label)
     .at(expr.span)
+    .recover()
 
 export const infer = (expr: Expr): Check<Type> => {
   switch (expr.kind) {
     case "var":
-      return lookup(expr.name).flatMap(instantiate).at(expr.span)
+      return lookup(expr.name)
+        .flatMap(instantiate)
+        .at(expr.span)
+        .recover(fresh())
     case "lit":
       return pure(typeof expr.value === "number" ? int : bool)
     case "lam":
@@ -45,6 +49,7 @@ export const infer = (expr: Expr): Check<Type> => {
         yield* unify(func, fn(param, result))
           .context("function call")
           .at(expr.func.span)
+          .recover()
         yield* expect(expr.arg, param, "function argument")
         return result
       })

@@ -8,7 +8,9 @@ const infer = (source: string) => {
   const parsed = program.parse(source)
   assert.ok(parsed.success, `failed to parse ${source}`)
   const result = typeOf(parsed.value)
-  return result.success ? show(result.value) : result.error.message
+  return result.success
+    ? show(result.value)
+    : result.errors.map(error => error.message).join("; ")
 }
 
 const cases: readonly [string, string][] = [

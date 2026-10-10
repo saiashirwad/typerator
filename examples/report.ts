@@ -16,7 +16,7 @@ export const report = <T>(
     console.log(
       result.success
         ? `${source}\n  : ${show(result.value)}\n`
-        : `${render(result.error, source)}\n`
+        : result.errors.map(error => `${render(error, source)}\n`).join("\n")
     )
   }
 }

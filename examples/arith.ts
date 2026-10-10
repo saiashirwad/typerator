@@ -96,6 +96,7 @@ const expect = (expr: Expr, expected: Type, label: string) =>
     .flatMap(found => unify(found, expected))
     .context(label)
     .at(expr.span)
+    .recover()
 
 const infer = (expr: Expr): Check<Type> => {
   switch (expr.kind) {
@@ -111,6 +112,7 @@ const infer = (expr: Expr): Check<Type> => {
         yield* choice(unify(left, int), unify(left, str))
           .context("left operand of +")
           .at(expr.left.span)
+          .recover()
         yield* expect(expr.right, left, "right operand of +")
         return left
       })

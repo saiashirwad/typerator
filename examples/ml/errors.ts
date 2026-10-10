@@ -13,6 +13,7 @@ report(program, typeOf, [
   `let inc = fun n -> n + 1 in
 let flag = inc 1 == 2 in
 inc flag`,
+  "let f = fun x -> x + true in f false",
   "let x = 1 x",
   "fun -> 1"
 ])

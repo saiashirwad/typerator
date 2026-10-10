@@ -7,11 +7,18 @@ export type Reply<A> =
 
 export type Result<A> =
   | { readonly success: true; readonly value: A }
-  | { readonly success: false; readonly error: Diagnostic }
+  | {
+    readonly success: false
+    readonly errors: readonly [Diagnostic, ...Diagnostic[]]
+  }
 
 export type Env = ReadonlyMap<string, Scheme>
 
-type State = { readonly subst: Map<number, Type>; next: number }
+type State = {
+  readonly subst: Map<number, Type>
+  readonly diagnostics: Diagnostic[]
+  next: number
+}
 
 export type Scope = {
   readonly env: Env
@@ -27,6 +34,17 @@ export class Check<A> {
 
   *[Symbol.iterator](): Generator<Check<A>, A, unknown> {
     return (yield this) as A
+  }
+
+  recover<B>(fallback: Check<B>): Check<A | B>
+  recover(this: Check<void>): Check<void>
+  recover(fallback: Check<unknown> = pure(undefined)): Check<unknown> {
+    return new Check(scope => {
+      const reply = this.step(scope)
+      if (reply.ok) return reply
+      scope.state.diagnostics.push(reply.error)
+      return fallback.step(scope)
+    })
   }
 
   map<B>(f: (value: A) => B): Check<B> {
@@ -158,18 +176,27 @@ export const sequence = <const Checks extends readonly Check<unknown>[]>(
     return values as Values<Checks>
   })
 
+const snapshot = (state: State): State => ({
+  subst: new Map(state.subst),
+  diagnostics: [...state.diagnostics],
+  next: state.next
+})
+
 const restore = (state: State, saved: State) => {
   state.subst.clear()
   for (const [id, type] of saved.subst) state.subst.set(id, type)
+  state.diagnostics.splice(0, Infinity, ...saved.diagnostics)
   state.next = saved.next
 }
 
 export const attempt = <A>(checker: Check<A>): Check<A> =>
   new Check(scope => {
-    const saved = { subst: new Map(scope.state.subst), next: scope.state.next }
+    const saved = snapshot(scope.state)
     const reply = checker.step(scope)
-    if (!reply.ok) restore(scope.state, saved)
-    return reply
+    const [recovered] = scope.state.diagnostics.slice(saved.diagnostics.length)
+    if (reply.ok && !recovered) return reply
+    restore(scope.state, saved)
+    return recovered ? { ok: false, error: recovered } : reply
   })
 
 export const choice = <A>(
@@ -185,10 +212,17 @@ export const choice = <A>(
   })
 
 export const run = <A>(checker: Check<A>, env: Env = new Map()): Result<A> => {
-  const reply = checker.step({ env, state: { subst: new Map(), next: 0 } })
-  return reply.ok
-    ? { success: true, value: reply.value }
-    : { success: false, error: reply.error }
+  const state: State = { subst: new Map(), diagnostics: [], next: 0 }
+  const reply = checker.step({ env, state })
+  const [first, ...rest] = state.diagnostics
+  if (!reply.ok) {
+    return {
+      success: false,
+      errors: first ? [first, ...rest, reply.error] : [reply.error]
+    }
+  }
+  if (first) return { success: false, errors: [first, ...rest] }
+  return { success: true, value: reply.value }
 }
 
 export const pure = <A>(value: A): Check<A> => new Check(() => ok(value))

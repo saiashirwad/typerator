@@ -36,7 +36,7 @@ const typeOf = (checker: Check<Type>) =>
   )
 
 const shown = (result: Result<Type>) =>
-  result.success ? show(result.value) : result.error.message
+  result.success ? show(result.value) : result.errors[0].message
 
 describe("check", () => {
   test("sequences steps and returns the final value", () => {
@@ -81,7 +81,7 @@ describe("combinators", () => {
 
   test("sequence stops at the first failure", () => {
     const result = run(sequence([pure(1), fail("boom"), pure(3)]))
-    assert.equal(!result.success && result.error.message, "boom")
+    assert.equal(!result.success && result.errors[0].message, "boom")
   })
 })
 
@@ -111,7 +111,36 @@ describe("backtracking", () => {
 
   test("choice reports the first error when every alternative fails", () => {
     const result = run(choice(fail("first"), fail("second")))
-    assert.equal(!result.success && result.error.message, "first")
+    assert.equal(!result.success && result.errors[0].message, "first")
+  })
+})
+
+describe("recovery", () => {
+  const messages = <A>(checker: Check<A>) => {
+    const result = run(checker)
+    return result.success ? [] : result.errors.map(error => error.message)
+  }
+
+  test("recover records the error and keeps checking", () => {
+    const checker = check(function*() {
+      yield* fail("first").recover()
+      yield* fail("second").recover()
+      yield* fail("third")
+    })
+    assert.deepEqual(messages(checker), ["first", "second", "third"])
+  })
+
+  test("recover continues with the fallback value", () => {
+    const checker = check(function*() {
+      const value = yield* fail("boom").recover(pure(5))
+      if (value !== 5) yield* fail("wrong fallback")
+    })
+    assert.deepEqual(messages(checker), ["boom"])
+  })
+
+  test("choice skips alternatives that recovered from an error", () => {
+    const checker = choice(fail("boom").recover(), pure(undefined))
+    assert.deepEqual(run(checker), { success: true, value: undefined })
   })
 })
 
@@ -129,7 +158,7 @@ describe("unify", () => {
     const result = run(unify(fn(int, int), fn(bool, int)))
     assert.equal(result.success, false)
     assert.equal(
-      !result.success && result.error.message,
+      !result.success && result.errors[0].message,
       "Expected bool -> int, found int -> int"
     )
   })
@@ -140,7 +169,7 @@ describe("unify", () => {
       yield* unify(a, fn(a, int))
     }))
     assert.equal(
-      !result.success && result.error.message,
+      !result.success && result.errors[0].message,
       "Infinite type: 'a occurs in 'a -> int"
     )
   })
@@ -160,7 +189,7 @@ describe("environment", () => {
     }))
     assert.equal(inside.success, true)
     assert.equal(
-      !outside.success && outside.error.message,
+      !outside.success && outside.errors[0].message,
       "Unbound variable: x"
     )
   })
@@ -190,7 +219,7 @@ describe("environment", () => {
 describe("diagnostics", () => {
   test("context labels collect innermost first", () => {
     const result = run(fail("boom").context("inner").context("outer"))
-    assert.deepEqual(!result.success && result.error.context, [
+    assert.deepEqual(!result.success && result.errors[0].context, [
       "inner",
       "outer"
     ])
@@ -200,7 +229,7 @@ describe("diagnostics", () => {
     const result = run(
       fail("boom").at({ start: 1, end: 2 }).at({ start: 0, end: 5 })
     )
-    assert.deepEqual(!result.success && result.error.span, {
+    assert.deepEqual(!result.success && result.errors[0].span, {
       start: 1,
       end: 2
     })
