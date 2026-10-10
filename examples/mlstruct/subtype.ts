@@ -9,13 +9,11 @@ import {
   or,
   record,
   show,
+  tvar,
   type Scheme,
-  type Type
+  type Type,
+  type Var
 } from "./type.ts"
-
-export type Env = ReadonlyMap<string, Scheme>
-
-type Var = Extract<Type, { readonly kind: "var" }>
 
 type Atom = Extract<Type, { readonly kind: "var" | "fn" | "record" | "tag" }>
 
@@ -42,13 +40,7 @@ const solver = state<Solver>(
 
 const level = scoped(0)
 
-export const env = scoped<Env>(new Map())
-
-const variable = (current: Solver, at: number): Var => {
-  const id = current.next++
-  current.bounds.set(id, { lower: [], upper: [] })
-  return { kind: "var", id, level: at }
-}
+const variable = (current: Solver, at: number): Var => tvar(current.next++, at)
 
 const boundsOf = (current: Solver, id: number): Bounds => {
   const known = current.bounds.get(id)
@@ -80,6 +72,27 @@ const mapFields = (type: Type, f: (field: Type) => Type) =>
   type.kind === "record"
     ? record(new Map([...type.fields].map(([label, t]) => [label, f(t)])))
     : type
+
+const children = (
+  type: Type,
+  positive: boolean,
+  f: (child: Type, positive: boolean) => Type
+): Type => {
+  switch (type.kind) {
+    case "fn":
+      return fn(f(type.from, !positive), f(type.to, positive))
+    case "record":
+      return mapFields(type, field => f(field, positive))
+    case "and":
+      return and(...type.types.map(part => f(part, positive)))
+    case "or":
+      return or(...type.types.map(part => f(part, positive)))
+    case "not":
+      return not(f(type.type, !positive))
+    default:
+      return type
+  }
+}
 
 const cross = (
   xs: readonly (readonly Literal[])[],
@@ -377,24 +390,15 @@ const prune = (
   positive: boolean,
   both: ReadonlySet<number>
 ): Type => {
-  const go = (inner: Type, polarity = positive) => prune(inner, polarity, both)
-  switch (type.kind) {
-    case "var":
-      if (both.has(type.id)) return type
-      return positive ? nothing : anything
-    case "fn":
-      return fn(go(type.from, !positive), go(type.to))
-    case "record":
-      return mapFields(type, field => go(field))
-    case "and":
-      return and(...type.types.map(part => go(part)))
-    case "or":
-      return or(...type.types.map(part => go(part)))
-    case "not":
-      return not(go(type.type, !positive))
-    default:
-      return type
+  if (type.kind !== "var") {
+    return children(
+      type,
+      positive,
+      (child, polarity) => prune(child, polarity, both)
+    )
   }
+  if (both.has(type.id)) return type
+  return positive ? nothing : anything
 }
 
 const tidy = (literals: readonly Literal[]) => {

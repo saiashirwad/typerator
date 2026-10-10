@@ -1,12 +1,10 @@
-import { bind, check, lookup, pure, run, type Check } from "typerator"
+import { bind, check, lookup, pure, run, scoped, type Check } from "typerator"
 import {
   constrain,
   fresh,
   generalize,
   instantiate,
-  env,
-  resolve,
-  type Env
+  resolve
 } from "./subtype.ts"
 import type { Expr } from "./syntax.ts"
 import {
@@ -19,8 +17,13 @@ import {
   or,
   record,
   tag,
+  type Scheme,
   type Type
 } from "./type.ts"
+
+export type Env = ReadonlyMap<string, Scheme>
+
+export const env = scoped<Env>(new Map())
 
 const expect = (expr: Expr, expected: Type, label: string) =>
   infer(expr)

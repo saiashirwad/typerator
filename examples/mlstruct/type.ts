@@ -11,11 +11,13 @@ export type Type =
 
 export type Scheme = { readonly level: number; readonly type: Type }
 
+export type Var = Extract<Type, { readonly kind: "var" }>
+
 export const anything: Type = { kind: "top" }
 
 export const nothing: Type = { kind: "bottom" }
 
-export const tvar = (id: number, level: number): Type => ({
+export const tvar = (id: number, level: number): Var => ({
   kind: "var",
   id,
   level
