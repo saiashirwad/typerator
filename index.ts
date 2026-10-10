@@ -11,10 +11,10 @@ export {
   resolve,
   run,
   unify,
-  type Context,
   type Env,
   type Reply,
-  type Result
+  type Result,
+  type Scope
 } from "./src/check.ts"
 
 export {

@@ -11,15 +11,15 @@ export type Result<A> =
 
 export type Env = ReadonlyMap<string, Scheme>
 
-export type Context = {
+export type Scope = {
   readonly env: Env
   readonly state: { readonly subst: Map<number, Type>; next: number }
 }
 
 export class Check<A> {
-  readonly step: (context: Context) => Reply<A>
+  readonly step: (scope: Scope) => Reply<A>
 
-  constructor(step: (context: Context) => Reply<A>) {
+  constructor(step: (scope: Scope) => Reply<A>) {
     this.step = step
   }
 
@@ -28,8 +28,8 @@ export class Check<A> {
   }
 
   context(label: string): Check<A> {
-    return new Check(context => {
-      const reply = this.step(context)
+    return new Check(scope => {
+      const reply = this.step(scope)
       return reply.ok
         ? reply
         : {
@@ -40,8 +40,8 @@ export class Check<A> {
   }
 
   at(span: Span | undefined): Check<A> {
-    return new Check(context => {
-      const reply = this.step(context)
+    return new Check(scope => {
+      const reply = this.step(scope)
       return reply.ok || !span || reply.error.span
         ? reply
         : { ok: false, error: { ...reply.error, span } }
@@ -119,11 +119,11 @@ const freeInScheme = (subst: ReadonlyMap<number, Type>, scheme: Scheme) =>
 export const check = <A>(
   body: () => Generator<Check<unknown>, A, unknown>
 ): Check<A> =>
-  new Check(context => {
+  new Check(scope => {
     const iterator = body()
     let current = iterator.next()
     while (!current.done) {
-      const reply = current.value.step(context)
+      const reply = current.value.step(scope)
       if (!reply.ok) return reply
       current = iterator.next(reply.value)
     }
@@ -165,8 +165,8 @@ export const local = <A>(
   scheme: Scheme,
   body: Check<A>
 ): Check<A> =>
-  new Check(context =>
-    body.step({ ...context, env: new Map(context.env).set(name, scheme) })
+  new Check(scope =>
+    body.step({ ...scope, env: new Map(scope.env).set(name, scheme) })
   )
 
 export const generalize = (type: Type): Check<Scheme> =>
