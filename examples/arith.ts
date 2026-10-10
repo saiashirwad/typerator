@@ -10,7 +10,7 @@ import {
   type Parser
 } from "parserator"
 import { check, choice, pure, run, type Check, type Span } from "typerator"
-import { bool, con, int, unify, type Type } from "typerator/unify"
+import { bool, con, int, unify, type Type, show } from "typerator/unify"
 import { keyword, located, spaces, symbol, token } from "./lexer.ts"
 import { report } from "./report.ts"
 
@@ -121,7 +121,7 @@ const infer = (expr: Expr): Check<Type> => {
   }
 }
 
-report(program, expr => run(infer(expr)), [
+report(program, expr => run(infer(expr)), show, [
   "1 + 2 == 3",
   "\"type\" + \"rator\"",
   "if 1 + 1 == 2 then \"yes\" else \"no\"",

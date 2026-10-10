@@ -1,8 +1,9 @@
+import { show } from "typerator/unify"
 import { report } from "../report.ts"
 import { typeOf } from "./infer.ts"
 import { program } from "./parser.ts"
 
-report(program, typeOf, [
+report(program, typeOf, show, [
   "fun x -> x",
   "fun x -> x + 1",
   "fun f -> fun g -> fun x -> f (g x)",

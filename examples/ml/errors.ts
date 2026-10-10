@@ -1,8 +1,9 @@
+import { show } from "typerator/unify"
 import { report } from "../report.ts"
 import { typeOf } from "./infer.ts"
 import { program } from "./parser.ts"
 
-report(program, typeOf, [
+report(program, typeOf, show, [
   "(fun x -> x + 1) true",
   "if 1 + 2 then 3 else 4",
   "if true then 10 else false",

@@ -1,4 +1,4 @@
-import { con, fn, tvar, type Env, type Type } from "typerator/unify"
+import { con, fn, tvar, type Env, type Type, show } from "typerator/unify"
 import { report } from "../report.ts"
 import { prelude, typeOf } from "./infer.ts"
 import { program } from "./parser.ts"
@@ -17,7 +17,7 @@ const env: Env = new Map([
   ["pair", { vars: [0, 1], type: fn(a, fn(b, pair(a, b))) }]
 ])
 
-report(program, expr => typeOf(expr, env), [
+report(program, expr => typeOf(expr, env), show, [
   "nil",
   "cons 1 (cons 2 nil)",
   "map (fun n -> n == 0) (cons 1 (cons 2 nil))",

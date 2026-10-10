@@ -1,10 +1,10 @@
 import type { Parser } from "parserator"
 import { render, type Result } from "typerator"
-import { show, type Type } from "typerator/unify"
 
-export const report = <T>(
+export const report = <T, V>(
   program: Parser<T>,
-  typeOf: (node: T) => Result<Type>,
+  typeOf: (node: T) => Result<V>,
+  show: (value: V) => string,
   sources: readonly string[]
 ) => {
   for (const source of sources) {

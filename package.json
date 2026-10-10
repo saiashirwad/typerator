@@ -6,14 +6,15 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./unify": "./src/unify/index.ts"
+    "./unify": "./src/unify/index.ts",
+    "./subtype": "./src/subtype/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.ts",
     "fmt": "dprint fmt",
     "fmt:check": "dprint check",
-    "examples": "node examples/arith.ts && node examples/ml/polymorphism.ts && node examples/ml/errors.ts && node examples/ml/lists.ts && node examples/ml/records.ts && node examples/ml/recursion.ts && node examples/ml/annotations.ts"
+    "examples": "node examples/arith.ts && node examples/ml/polymorphism.ts && node examples/ml/errors.ts && node examples/ml/lists.ts && node examples/ml/records.ts && node examples/ml/recursion.ts && node examples/ml/annotations.ts && node examples/mlstruct/main.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

@@ -52,6 +52,7 @@ diagnostic. `check(function* …)` sequences steps with `yield*`.
 | `check.context(label)`   | Label errors with where they happened           |
 | `check.at(span)`         | Attach a source span to errors                  |
 | `check.recover(other?)`  | Record the error, continue with `other`         |
+| `within(key, f, check)`  | Run `check` with a scoped value changed by `f`  |
 
 `recover` lets one run report every error instead of stopping at the first:
 
@@ -64,7 +65,18 @@ const expect = (expr: Expr, expected: Type, label: string) =>
     .recover()
 ```
 
-## Types
+## Kits
+
+The core knows nothing about types. Kits bring a type representation and
+the steps that solve it:
+
+```ts
+import { check, run } from "typerator"
+import { fresh, unify } from "typerator/unify"
+import { constrain } from "typerator/subtype"
+```
+
+### `typerator/unify`: Hindley–Milner
 
 Types are type variables, named constructors and rows:
 
@@ -86,6 +98,7 @@ Inference uses Hindley–Milner with row polymorphism:
 | `resolve(type)`            | Apply everything solved so far                |
 | `lookup(name)`             | A variable's scheme                           |
 | `local(name, scheme, c)`   | Run `c` with a variable in scope              |
+| `local(env, c)`            | Run `c` with several variables in scope       |
 | `generalize(type)`         | Quantify variables not bound in scope         |
 | `instantiate(scheme)`      | Replace quantified variables with fresh ones  |
 
@@ -94,6 +107,54 @@ case "let":
   return check(function*() {
     const value = yield* infer(expr.value).flatMap(generalize)
     return yield* local(expr.name, value, infer(expr.body))
+  })
+```
+
+### `typerator/subtype`: MLstruct
+
+Inference with subtyping in a Boolean algebra of structural types, after
+[MLstruct](https://doi.org/10.1145/3563304). Types are `anything`,
+`nothing`, type variables, functions, records, class tags, and `and`, `or`
+and `not` of them. No annotations needed:
+
+```
+fun x -> if x is Some then x.value else 0
+  : { value : 'a } | ~Some -> 'a | int
+
+fun x -> { a = x, b = x.f }
+  : 'a & { f : 'b } -> { a : 'a, b : 'b }
+```
+
+| Combinator                 | Meaning                                       |
+| -------------------------- | --------------------------------------------- |
+| `fresh()`                  | A new type variable                           |
+| `constrain(found, expected)` | Require `found` to be a subtype of `expected` |
+| `resolve(type)`            | Turn bounds into a readable type              |
+| `generalize(check)`        | Run `check` one level deeper, then quantify   |
+| `instantiate(scheme)`      | Copy quantified variables with their bounds   |
+| `lookup`, `local`          | As in `typerator/unify`                       |
+
+Refining a variable with `if x is C` is two constraints:
+
+```ts
+const matched = yield* fresh()
+const unmatched = yield* fresh()
+yield* expect(x, or(and(tag(C), matched), and(not(tag(C)), unmatched)))
+```
+
+### Writing a kit
+
+A kit keeps its state under typed keys, so `attempt` and `choice` can undo
+it, and `within` can scope it:
+
+```ts
+const solution = state(() => new Map<number, Type>(), map => new Map(map))
+const env = scoped<ReadonlyMap<string, Scheme>>(new Map())
+
+export const lookup = (name: string): Check<Scheme> =>
+  new Check(scope => {
+    const scheme = scope.get(env).get(name)
+    return scheme ? Reply.ok(scheme) : Reply.error(`Unbound variable: ${name}`)
   })
 ```
 
@@ -116,6 +177,8 @@ pnpm examples
   - records with row polymorphism
   - type annotations
   - multiple errors per program
+- `examples/mlstruct/` — the same language with subtyping, class instances
+  like `Some { value = 1 }`, and `if x is Some then … else …`
 
 ## Development
 
