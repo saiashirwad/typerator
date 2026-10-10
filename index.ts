@@ -23,10 +23,13 @@ export {
 export {
   bool,
   con,
+  empty,
+  extend,
   fn,
   free,
   int,
   mono,
+  record,
   show,
   tvar,
   type Scheme,

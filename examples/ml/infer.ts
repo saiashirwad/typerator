@@ -10,6 +10,7 @@ import {
   lookup,
   mono,
   pure,
+  record,
   resolve,
   run,
   unify,
@@ -52,6 +53,25 @@ export const infer = (expr: Expr): Check<Type> => {
           .recover()
         yield* expect(expr.arg, param, "function argument")
         return result
+      })
+    case "record":
+      return check(function*() {
+        const fields: Record<string, Type> = {}
+        for (const [label, value] of expr.fields) {
+          fields[label] = yield* infer(value)
+        }
+        return record(fields)
+      })
+    case "field":
+      return check(function*() {
+        const type = yield* fresh()
+        const rest = yield* fresh()
+        yield* expect(
+          expr.record,
+          record({ [expr.label]: type }, rest),
+          `field ${expr.label}`
+        )
+        return type
       })
     case "let":
       return check(function*() {

@@ -5,9 +5,11 @@ import {
   eof,
   many,
   parser,
+  postfix,
   precedence,
   recursive,
   regex,
+  sepBy,
   type Parser
 } from "parserator"
 import {
@@ -35,20 +37,38 @@ const call = (func: string) => (left: Expr, right: Expr) =>
   Expr.app(Expr.var(func), left, right)
 
 const expr: Parser<Expr> = recursive<Expr>(expr => {
+  const field = parser(function*() {
+    const label = yield* name
+    yield* symbol("=")
+    return [label, yield* expr] as const
+  })
+
   const atom = located(
     choice(
       token(regex(/\d+/)).map(digits => Expr.lit(Number(digits))),
       keyword("true").map(() => Expr.lit(true)),
       keyword("false").map(() => Expr.lit(false)),
       name.map(Expr.var),
-      between(symbol("("), symbol(")"), expr)
+      between(symbol("("), symbol(")"), expr),
+      between(symbol("{"), symbol("}"), sepBy(field, symbol(","))).map(
+        Expr.record
+      )
+    )
+  )
+
+  const selection = located(
+    postfix(
+      atom,
+      symbol(".").zipRight(name).map(label => (record: Expr) =>
+        Expr.field(record, label)
+      )
     )
   )
 
   const application = located(
     parser(function*() {
-      const func = yield* atom
-      const args = yield* many(atom)
+      const func = yield* selection
+      const args = yield* many(selection)
       return Expr.app(func, ...args)
     })
   )

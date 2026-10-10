@@ -6,6 +6,11 @@ type Node =
   | { readonly kind: "lam"; readonly param: string; readonly body: Expr }
   | { readonly kind: "app"; readonly func: Expr; readonly arg: Expr }
   | {
+    readonly kind: "record"
+    readonly fields: readonly (readonly [string, Expr])[]
+  }
+  | { readonly kind: "field"; readonly record: Expr; readonly label: string }
+  | {
     readonly kind: "let"
     readonly name: string
     readonly value: Expr
@@ -26,6 +31,15 @@ export const Expr = {
   lam: (param: string, body: Expr): Expr => ({ kind: "lam", param, body }),
   app: (func: Expr, ...args: readonly Expr[]): Expr =>
     args.reduce<Expr>((func, arg) => ({ kind: "app", func, arg }), func),
+  record: (fields: readonly (readonly [string, Expr])[]): Expr => ({
+    kind: "record",
+    fields
+  }),
+  field: (record: Expr, label: string): Expr => ({
+    kind: "field",
+    record,
+    label
+  }),
   let: (name: string, value: Expr, body: Expr): Expr => ({
     kind: "let",
     name,

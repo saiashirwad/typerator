@@ -1,5 +1,13 @@
 import type { Diagnostic, Span } from "./diagnostic.ts"
-import { con, free, show, tvar, type Scheme, type Type } from "./type.ts"
+import {
+  con,
+  extend,
+  free,
+  show,
+  tvar,
+  type Scheme,
+  type Type
+} from "./type.ts"
 
 export type Reply<A> =
   | { readonly ok: true; readonly value: A }
@@ -90,10 +98,19 @@ const error = (message: string): Reply<never> => ({
   error: { message, context: [] }
 })
 
-const apply = (subst: ReadonlyMap<number, Type>, type: Type): Type => {
-  if (type.kind === "con") {
-    return con(type.name, ...type.args.map(arg => apply(subst, arg)))
+const children = (type: Type, f: (child: Type) => Type): Type => {
+  switch (type.kind) {
+    case "var":
+      return type
+    case "con":
+      return con(type.name, ...type.args.map(f))
+    case "row":
+      return extend(type.label, f(type.type), f(type.rest))
   }
+}
+
+const apply = (subst: ReadonlyMap<number, Type>, type: Type): Type => {
+  if (type.kind !== "var") return children(type, child => apply(subst, child))
   const bound = subst.get(type.id)
   return bound ? apply(subst, bound) : type
 }
@@ -101,11 +118,13 @@ const apply = (subst: ReadonlyMap<number, Type>, type: Type): Type => {
 const substitute = (type: Type, mapping: ReadonlyMap<number, Type>): Type =>
   type.kind === "var"
     ? (mapping.get(type.id) ?? type)
-    : con(type.name, ...type.args.map(arg => substitute(arg, mapping)))
+    : children(type, child => substitute(child, mapping))
 
 type Failure =
   | { readonly kind: "mismatch" }
   | { readonly kind: "infinite"; readonly id: number; readonly type: Type }
+
+type Row = Extract<Type, { readonly kind: "row" }>
 
 const bind = (
   subst: Map<number, Type>,
@@ -118,30 +137,59 @@ const bind = (
   return undefined
 }
 
-const solve = (
-  subst: Map<number, Type>,
-  a: Type,
-  b: Type
-): Failure | undefined => {
-  const x = apply(subst, a)
-  const y = apply(subst, b)
-  if (x.kind === "var") return bind(subst, x.id, y)
-  if (y.kind === "var") return bind(subst, y.id, x)
+const tail = (type: Type): Type => type.kind === "row" ? tail(type.rest) : type
+
+const rewrite = (
+  state: State,
+  row: Type,
+  label: string
+): readonly [Type, Type] | undefined => {
+  const resolved = apply(state.subst, row)
+  if (resolved.kind === "row") {
+    if (resolved.label === label) return [resolved.type, resolved.rest]
+    const found = rewrite(state, resolved.rest, label)
+    return found && [found[0], extend(resolved.label, resolved.type, found[1])]
+  }
+  if (resolved.kind !== "var") return undefined
+  const type = tvar(state.next++)
+  const rest = tvar(state.next++)
+  state.subst.set(resolved.id, extend(label, type, rest))
+  return [type, rest]
+}
+
+const solveRow = (state: State, row: Row, other: Type): Failure | undefined => {
+  const end = tail(row.rest)
+  const found = rewrite(state, other, row.label)
+  if (!found) return { kind: "mismatch" }
+  if (end.kind === "var" && state.subst.has(end.id)) {
+    return { kind: "infinite", id: end.id, type: row }
+  }
+  const [type, rest] = found
+  return solve(state, row.type, type) ?? solve(state, row.rest, rest)
+}
+
+const solve = (state: State, a: Type, b: Type): Failure | undefined => {
+  const x = apply(state.subst, a)
+  const y = apply(state.subst, b)
+  if (x.kind === "var") return bind(state.subst, x.id, y)
+  if (y.kind === "var") return bind(state.subst, y.id, x)
+  if (x.kind === "row") return solveRow(state, x, y)
+  if (y.kind === "row") return solveRow(state, y, x)
   if (x.name !== y.name || x.args.length !== y.args.length) {
     return { kind: "mismatch" }
   }
-  return solveAll(subst, x.args, y.args)
+  return solveAll(state, x.args, y.args)
 }
 
 const solveAll = (
-  subst: Map<number, Type>,
+  state: State,
   xs: readonly Type[],
   ys: readonly Type[]
 ): Failure | undefined => {
   const [x, ...restX] = xs
   const [y, ...restY] = ys
   if (!x || !y) return undefined
-  return solve(subst, x, y) ?? solveAll(subst, restX, restY)
+  return solve(state, x, y) ?? solveAll(state, restX, restY)
 }
 
 const freeInScheme = (subst: ReadonlyMap<number, Type>, scheme: Scheme) =>
@@ -238,12 +286,16 @@ export const resolve = (type: Type): Check<Type> =>
 
 export const unify = (found: Type, expected: Type): Check<void> =>
   new Check(({ state }) => {
-    const failure = solve(state.subst, found, expected)
+    const foundBefore = apply(state.subst, found)
+    const expectedBefore = apply(state.subst, expected)
+    const failure = solve(state, found, expected)
     if (failure === undefined) return ok(undefined)
     const names = new Map<number, string>()
-    const display = (type: Type) => show(apply(state.subst, type), names)
+    const display = (type: Type) => show(type, names)
     if (failure.kind === "mismatch") {
-      return error(`Expected ${display(expected)}, found ${display(found)}`)
+      return error(
+        `Expected ${display(expectedBefore)}, found ${display(foundBefore)}`
+      )
     }
     const variable = display(tvar(failure.id))
     return error(

@@ -24,7 +24,21 @@ const cases: readonly [string, string][] = [
   ["fun x -> x + 1 == true", "Expected int, found bool"],
   ["fun x -> x x", "Infinite type: 'a occurs in 'a -> 'b"],
   ["fun f -> let a = f 1 in f true", "Expected int, found bool"],
-  ["missing", "Unbound variable: missing"]
+  ["missing", "Unbound variable: missing"],
+  ["fun r -> r.x", "{ x : 'a | 'b } -> 'a"],
+  ["(fun r -> r.x) { x = 1, y = true }", "int"],
+  [
+    "let get = fun r -> r.name in get { name = 1, age = 2 } + get { name = 3 }",
+    "int"
+  ],
+  [
+    "(fun r -> r.x + 1) { y = 2 }",
+    "Expected { x : int | 'a }, found { y : int }"
+  ],
+  [
+    "let f = fun x -> x + true in f false",
+    "Expected int, found bool; Expected int, found bool"
+  ]
 ]
 
 for (const [source, expected] of cases) {

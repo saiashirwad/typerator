@@ -16,6 +16,7 @@ import {
   lookup,
   mono,
   pure,
+  record,
   render,
   resolve,
   run,
@@ -177,6 +178,53 @@ describe("unify", () => {
   test("compares argument counts", () => {
     const result = run(unify(con("pair", int, int), con("pair", int)))
     assert.equal(result.success, false)
+  })
+})
+
+describe("records", () => {
+  test("field order does not matter", () => {
+    const result = typeOf(check(function*() {
+      const a = yield* fresh()
+      yield* unify(record({ x: int, y: bool }), record({ y: a, x: int }))
+      return a
+    }))
+    assert.equal(shown(result), "bool")
+  })
+
+  test("an open record picks up the fields it is missing", () => {
+    const result = typeOf(check(function*() {
+      const rest = yield* fresh()
+      yield* unify(record({ x: int }, rest), record({ x: int, y: bool }))
+      return record({}, rest)
+    }))
+    assert.equal(shown(result), "{ y : bool }")
+  })
+
+  test("closed records must have the same fields", () => {
+    const missing = run(unify(record({ x: int }), record({ y: int })))
+    const extra = run(unify(record({ x: int, y: int }), record({ x: int })))
+    assert.equal(
+      !missing.success && missing.errors[0].message,
+      "Expected { y : int }, found { x : int }"
+    )
+    assert.equal(extra.success, false)
+  })
+
+  test("rows sharing a tail cannot gain different fields", () => {
+    const result = run(check(function*() {
+      const rest = yield* fresh()
+      yield* unify(record({ x: int }, rest), record({ y: int }, rest))
+    }))
+    assert.match(
+      !result.success ? result.errors[0].message : "",
+      /^Infinite type/
+    )
+  })
+
+  test("show prints open and closed records", () => {
+    assert.equal(show(record({ x: int, y: bool })), "{ x : int, y : bool }")
+    assert.equal(show(record({ x: int }, tvar(7))), "{ x : int | 'a }")
+    assert.equal(show(record({})), "{}")
   })
 })
 
