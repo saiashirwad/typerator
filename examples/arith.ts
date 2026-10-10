@@ -9,8 +9,15 @@ import {
   regex,
   type Parser
 } from "parserator"
-import { check, choice, pure, run, type Check, type Span } from "typerator"
-import { bool, con, int, unify, type Type, show } from "typerator/unify"
+import {
+  check,
+  choice,
+  fail,
+  pure,
+  run,
+  type Check,
+  type Span
+} from "typerator"
 import { keyword, located, spaces, symbol, token } from "./lexer.ts"
 import { report } from "./report.ts"
 
@@ -78,11 +85,16 @@ const expr: Parser<Expr> = recursive<Expr>(expr => {
 
 const program = expr.zipLeft(spaces).zipLeft(eof)
 
-const str = con("string")
+type Type = "int" | "string" | "bool"
+
+const is = (found: Type, expected: Type): Check<void> =>
+  found === expected
+    ? pure(undefined)
+    : fail(`Expected ${expected}, found ${found}`)
 
 const expect = (expr: Expr, expected: Type, label: string) =>
   infer(expr)
-    .flatMap(found => unify(found, expected))
+    .flatMap(found => is(found, expected))
     .context(label)
     .at(expr.span)
     .recover()
@@ -90,15 +102,15 @@ const expect = (expr: Expr, expected: Type, label: string) =>
 const infer = (expr: Expr): Check<Type> => {
   switch (expr.kind) {
     case "num":
-      return pure(int)
+      return pure("int")
     case "str":
-      return pure(str)
+      return pure("string")
     case "bool":
-      return pure(bool)
+      return pure("bool")
     case "add":
       return check(function*() {
         const left = yield* infer(expr.left)
-        yield* choice(unify(left, int), unify(left, str))
+        yield* choice(is(left, "int"), is(left, "string"))
           .context("left operand of +")
           .at(expr.left.span)
           .recover()
@@ -106,14 +118,14 @@ const infer = (expr: Expr): Check<Type> => {
         return left
       })
     case "eq":
-      return check(function*() {
+      return check<Type>(function*() {
         const left = yield* infer(expr.left)
         yield* expect(expr.right, left, "right operand of ==")
-        return bool
+        return "bool"
       })
     case "if":
       return check(function*() {
-        yield* expect(expr.cond, bool, "if condition")
+        yield* expect(expr.cond, "bool", "if condition")
         const then = yield* infer(expr.then)
         yield* expect(expr.else, then, "else branch")
         return then
@@ -121,7 +133,7 @@ const infer = (expr: Expr): Check<Type> => {
   }
 }
 
-report(program, expr => run(infer(expr)), show, [
+report(program, expr => run(infer(expr)), type => type, [
   "1 + 2 == 3",
   "\"type\" + \"rator\"",
   "if 1 + 1 == 2 then \"yes\" else \"no\"",

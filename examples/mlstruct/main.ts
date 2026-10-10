@@ -1,7 +1,7 @@
-import { show } from "typerator/subtype"
 import { report } from "../report.ts"
 import { typeOf } from "./infer.ts"
 import { program } from "./parser.ts"
+import { show } from "./type.ts"
 
 report(program, typeOf, show, [
   "fun x -> x",

@@ -1,4 +1,4 @@
-import { Check, check, Reply, scoped, state, within } from "../check.ts"
+import { check, fail, get, scoped, state, type Check } from "typerator"
 import {
   con,
   extend,
@@ -18,7 +18,7 @@ const solution = state<Solution>(
   ({ subst, next }) => ({ subst: new Map(subst), next })
 )
 
-const env = scoped<Env>(new Map())
+export const env = scoped<Env>(new Map())
 
 const children = (type: Type, f: (child: Type) => Type): Type => {
   switch (type.kind) {
@@ -124,61 +124,41 @@ const freeInScheme = (subst: ReadonlyMap<number, Type>, scheme: Scheme) =>
     .flatMap(id => free(apply(subst, tvar(id))))
 
 export const fresh = (): Check<Type> =>
-  new Check(scope => Reply.ok(tvar(scope.get(solution).next++)))
+  get(solution).map(current => tvar(current.next++))
 
 export const resolve = (type: Type): Check<Type> =>
-  new Check(scope => Reply.ok(apply(scope.get(solution).subst, type)))
+  get(solution).map(current => apply(current.subst, type))
 
 export const unify = (found: Type, expected: Type): Check<void> =>
-  new Check(scope => {
-    const current = scope.get(solution)
+  check(function*() {
+    const current = yield* get(solution)
     const foundBefore = apply(current.subst, found)
     const expectedBefore = apply(current.subst, expected)
     const failure = solve(current, found, expected)
-    if (failure === undefined) return Reply.ok(undefined)
+    if (failure === undefined) return
     const names = new Map<number, string>()
     const display = (type: Type) => show(type, names)
     if (failure.kind === "mismatch") {
-      return Reply.error(
+      return yield* fail(
         `Expected ${display(expectedBefore)}, found ${display(foundBefore)}`
       )
     }
     const variable = display(tvar(failure.id))
-    return Reply.error(
+    return yield* fail(
       `Infinite type: ${variable} occurs in ${display(failure.type)}`
     )
   })
 
-export const lookup = (name: string): Check<Scheme> =>
-  new Check(scope => {
-    const scheme = scope.get(env).get(name)
-    return scheme ? Reply.ok(scheme) : Reply.error(`Unbound variable: ${name}`)
-  })
-
-export function local<A>(name: string, scheme: Scheme, body: Check<A>): Check<A>
-export function local<A>(bindings: Env, body: Check<A>): Check<A>
-export function local<A>(
-  ...args:
-    | readonly [string, Scheme, Check<A>]
-    | readonly [Env, Check<A>]
-): Check<A> {
-  const [bindings, body] = args.length === 3
-    ? [new Map([[args[0], args[1]]]), args[2]]
-    : args
-  return within(env, current => new Map([...current, ...bindings]), body)
-}
-
 export const generalize = (type: Type): Check<Scheme> =>
-  new Check(scope => {
-    const { subst } = scope.get(solution)
+  check(function*() {
+    const { subst } = yield* get(solution)
+    const bindings = yield* get(env)
     const bound = new Set(
-      [...scope.get(env).values()].flatMap(scheme =>
-        freeInScheme(subst, scheme)
-      )
+      [...bindings.values()].flatMap(scheme => freeInScheme(subst, scheme))
     )
     const resolved = apply(subst, type)
     const vars = [...new Set(free(resolved))].filter(id => !bound.has(id))
-    return Reply.ok({ vars, type: resolved })
+    return { vars, type: resolved }
   })
 
 export const instantiate = (scheme: Scheme): Check<Type> =>

@@ -1,23 +1,21 @@
 import assert from "node:assert/strict"
 import { describe, test } from "node:test"
 import { check, run, type Check } from "typerator"
+import { typeOf } from "../examples/mlstruct/infer.ts"
+import { program } from "../examples/mlstruct/parser.ts"
+import { constrain, fresh, resolve } from "../examples/mlstruct/subtype.ts"
 import {
   and,
   bool,
-  constrain,
   fn,
-  fresh,
   int,
   not,
   or,
   record,
-  resolve,
   show,
   tag,
   type Type
-} from "typerator/subtype"
-import { typeOf } from "../examples/mlstruct/infer.ts"
-import { program } from "../examples/mlstruct/parser.ts"
+} from "../examples/mlstruct/type.ts"
 
 const holds = (found: Type, expected: Type) =>
   run(constrain(found, expected)).success

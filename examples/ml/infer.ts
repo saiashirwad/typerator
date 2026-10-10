@@ -1,21 +1,24 @@
-import { check, fail, pure, run, sequence, type Check } from "typerator"
 import {
-  bool,
-  fn,
+  bind,
+  check,
+  fail,
+  lookup,
+  pure,
+  run,
+  sequence,
+  type Check
+} from "typerator"
+import type { Expr, TypeExpr } from "./syntax.ts"
+import { bool, fn, int, mono, record, type Type } from "./type.ts"
+import {
   fresh,
   generalize,
   instantiate,
-  int,
-  local,
-  lookup,
-  mono,
-  record,
+  env,
   resolve,
   unify,
-  type Env,
-  type Type
-} from "typerator/unify"
-import type { Expr, TypeExpr } from "./syntax.ts"
+  type Env
+} from "./unify.ts"
 
 const expect = (expr: Expr, expected: Type, label: string) =>
   infer(expr)
@@ -61,7 +64,7 @@ const annotation = (
 export const infer = (expr: Expr): Check<Type> => {
   switch (expr.kind) {
     case "var":
-      return lookup(expr.name)
+      return lookup(env, expr.name)
         .flatMap(instantiate)
         .at(expr.span)
         .recover(fresh())
@@ -70,7 +73,11 @@ export const infer = (expr: Expr): Check<Type> => {
     case "lam":
       return check(function*() {
         const param = yield* fresh()
-        const body = yield* local(expr.param, mono(param), infer(expr.body))
+        const body = yield* bind(
+          env,
+          [[expr.param, mono(param)]],
+          infer(expr.body)
+        )
         return fn(param, body)
       })
     case "app":
@@ -109,18 +116,18 @@ export const infer = (expr: Expr): Check<Type> => {
         const value = yield* infer(expr.value)
           .flatMap(generalize)
           .context(`let ${expr.name}`)
-        return yield* local(expr.name, value, infer(expr.body))
+        return yield* bind(env, [[expr.name, value]], infer(expr.body))
       })
     case "rec":
       return check(function*() {
         const self = yield* fresh()
-        yield* local(
-          expr.name,
-          mono(self),
+        yield* bind(
+          env,
+          [[expr.name, mono(self)]],
           expect(expr.value, self, `let rec ${expr.name}`)
         )
         const scheme = yield* generalize(self)
-        return yield* local(expr.name, scheme, infer(expr.body))
+        return yield* bind(env, [[expr.name, scheme]], infer(expr.body))
       })
     case "annot":
       return check(function*() {
@@ -145,5 +152,5 @@ export const prelude: Env = new Map([
   ["eq", mono(fn(int, fn(int, bool)))]
 ])
 
-export const typeOf = (expr: Expr, env = prelude) =>
-  run(local(env, infer(expr).flatMap(resolve)))
+export const typeOf = (expr: Expr, globals = prelude) =>
+  run(bind(env, globals, infer(expr).flatMap(resolve)))
