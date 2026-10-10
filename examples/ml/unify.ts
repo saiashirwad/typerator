@@ -13,9 +13,17 @@ export type Env = ReadonlyMap<string, Scheme>
 
 type Solution = { readonly subst: Map<number, Type>; next: number }
 
-const solution = state<Solution>(
+export const solution = state<Solution>(
   () => ({ subst: new Map(), next: 0 }),
-  ({ subst, next }) => ({ subst: new Map(subst), next })
+  current => {
+    const subst = new Map(current.subst)
+    const next = current.next
+    return () => {
+      current.subst.clear()
+      for (const [id, type] of subst) current.subst.set(id, type)
+      current.next = next
+    }
+  }
 )
 
 export const env = scoped<Env>(new Map())
@@ -104,18 +112,11 @@ const solve = (current: Solution, a: Type, b: Type): Failure | undefined => {
   if (x.name !== y.name || x.args.length !== y.args.length) {
     return { kind: "mismatch" }
   }
-  return solveAll(current, x.args, y.args)
-}
-
-const solveAll = (
-  current: Solution,
-  xs: readonly Type[],
-  ys: readonly Type[]
-): Failure | undefined => {
-  const [x, ...restX] = xs
-  const [y, ...restY] = ys
-  if (!x || !y) return undefined
-  return solve(current, x, y) ?? solveAll(current, restX, restY)
+  for (const [index, arg] of x.args.entries()) {
+    const failure = solve(current, arg, y.args[index]!)
+    if (failure) return failure
+  }
+  return undefined
 }
 
 const freeInScheme = (subst: ReadonlyMap<number, Type>, scheme: Scheme) =>
@@ -147,7 +148,7 @@ export const unify = (found: Type, expected: Type): Check<void> =>
     return yield* fail(
       `Infinite type: ${variable} occurs in ${display(failure.type)}`
     )
-  })
+  }).atomic()
 
 export const generalize = (type: Type): Check<Scheme> =>
   check(function*() {

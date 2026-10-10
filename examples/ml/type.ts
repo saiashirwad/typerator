@@ -41,12 +41,12 @@ export const extend = (label: string, type: Type, rest: Type): Type => ({
 })
 
 export const record = (
-  fields: Readonly<Record<string, Type>>,
+  fields: Iterable<readonly [string, Type]>,
   rest: Type = empty
 ): Type =>
   con(
     "record",
-    Object.entries(fields).reduceRight(
+    [...fields].reduceRight(
       (row, [label, type]) => extend(label, type, row),
       rest
     )

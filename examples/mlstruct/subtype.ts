@@ -25,17 +25,26 @@ type Solver = { readonly bounds: Map<number, Bounds>; next: number }
 
 type Failure = { readonly found: Type; readonly expected: Type }
 
-const solver = state<Solver>(
+export const solver = state<Solver>(
   () => ({ bounds: new Map(), next: 0 }),
-  ({ bounds, next }) => ({
-    bounds: new Map(
-      [...bounds].map(([id, { lower, upper }]) => [
-        id,
-        { lower: [...lower], upper: [...upper] }
-      ])
-    ),
-    next
-  })
+  current => {
+    const next = current.next
+    const entries = [...current.bounds].map(([id, bounds]) => ({
+      id,
+      bounds,
+      lower: [...bounds.lower],
+      upper: [...bounds.upper]
+    }))
+    return () => {
+      current.next = next
+      current.bounds.clear()
+      for (const { id, bounds, lower, upper } of entries) {
+        bounds.lower.splice(0, bounds.lower.length, ...lower)
+        bounds.upper.splice(0, bounds.upper.length, ...upper)
+        current.bounds.set(id, bounds)
+      }
+    }
+  }
 )
 
 const level = scoped(0)
@@ -70,7 +79,7 @@ const levelOf = (type: Type): number => {
 
 const mapFields = (type: Type, f: (field: Type) => Type) =>
   type.kind === "record"
-    ? record(new Map([...type.fields].map(([label, t]) => [label, f(t)])))
+    ? record([...type.fields].map(([label, t]) => [label, f(t)]))
     : type
 
 const children = (
@@ -171,18 +180,8 @@ const extrude = (
       }
       return copy
     }
-    case "fn":
-      return fn(go(type.from, !positive), go(type.to))
-    case "record":
-      return mapFields(type, field => go(field))
-    case "and":
-      return and(...type.types.map(part => go(part)))
-    case "or":
-      return or(...type.types.map(part => go(part)))
-    case "not":
-      return not(go(type.type, !positive))
     default:
-      return type
+      return children(type, positive, go)
   }
 }
 
@@ -307,18 +306,8 @@ const freshen = (
       fresh.upper.push(...original.upper.map(go))
       return copy
     }
-    case "fn":
-      return fn(go(type.from), go(type.to))
-    case "record":
-      return mapFields(type, go)
-    case "and":
-      return and(...type.types.map(go))
-    case "or":
-      return or(...type.types.map(go))
-    case "not":
-      return not(go(type.type))
     default:
-      return type
+      return children(type, true, go)
   }
 }
 
@@ -341,18 +330,8 @@ const coalesce = (
       )
       return positive ? or(type, ...bounds) : and(type, ...bounds)
     }
-    case "fn":
-      return fn(go(type.from, !positive), go(type.to))
-    case "record":
-      return mapFields(type, field => go(field))
-    case "and":
-      return and(...type.types.map(part => go(part)))
-    case "or":
-      return or(...type.types.map(part => go(part)))
-    case "not":
-      return not(go(type.type, !positive))
     default:
-      return type
+      return children(type, positive, go)
   }
 }
 
@@ -434,7 +413,7 @@ const normalize = (type: Type): Type => {
   )
 }
 
-export const fresh = (): Check<Type> =>
+export const fresh = (): Check<Var> =>
   check(function*() {
     return variable(yield* get(solver), yield* get(level))
   })
@@ -449,7 +428,7 @@ export const constrain = (found: Type, expected: Type): Check<void> =>
     return yield* fail(
       `Expected ${expectedType}, found ${show(failure.found, names)}`
     )
-  })
+  }).atomic()
 
 export const resolve = (type: Type): Check<Type> =>
   get(solver).map(current => {

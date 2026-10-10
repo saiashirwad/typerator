@@ -2,6 +2,7 @@ import {
   bind,
   check,
   fail,
+  get,
   lookup,
   pure,
   run,
@@ -9,23 +10,23 @@ import {
   type Check
 } from "typerator"
 import type { Expr, TypeExpr } from "./syntax.ts"
-import { bool, fn, int, mono, record, type Type } from "./type.ts"
+import { bool, fn, free, int, mono, record, type Type } from "./type.ts"
 import {
   fresh,
   generalize,
   instantiate,
   env,
   resolve,
+  solution,
   unify,
   type Env
 } from "./unify.ts"
 
 const expect = (expr: Expr, expected: Type, label: string) =>
   infer(expr)
-    .flatMap(found => unify(found, expected))
+    .flatMap(found => unify(found, expected).recover())
     .context(label)
     .at(expr.span)
-    .recover()
 
 const builtins: ReadonlyMap<string, Type> = new Map([
   ["int", int],
@@ -57,7 +58,7 @@ const annotation = (
         type.fields.map(([label, field]) =>
           annotation(field, vars).map(type => [label, type] as const)
         )
-      ).map(fields => record(Object.fromEntries(fields)))
+      ).map(fields => record(fields))
   }
 }
 
@@ -94,9 +95,9 @@ export const infer = (expr: Expr): Check<Type> => {
       })
     case "record":
       return check(function*() {
-        const fields: Record<string, Type> = {}
+        const fields = new Map<string, Type>()
         for (const [label, value] of expr.fields) {
-          fields[label] = yield* infer(value)
+          fields.set(label, yield* infer(value))
         }
         return record(fields)
       })
@@ -106,7 +107,7 @@ export const infer = (expr: Expr): Check<Type> => {
         const rest = yield* fresh()
         yield* expect(
           expr.record,
-          record({ [expr.label]: type }, rest),
+          record([[expr.label, type]], rest),
           `field ${expr.label}`
         )
         return type
@@ -153,4 +154,14 @@ export const prelude: Env = new Map([
 ])
 
 export const typeOf = (expr: Expr, globals = prelude) =>
-  run(bind(env, globals, infer(expr).flatMap(resolve)))
+  run(check(function*() {
+    const current = yield* get(solution)
+    for (const scheme of globals.values()) {
+      for (const id of free(scheme.type)) {
+        if (!scheme.vars.includes(id)) {
+          current.next = Math.max(current.next, id + 1)
+        }
+      }
+    }
+    return yield* bind(env, globals, infer(expr).flatMap(resolve))
+  }))

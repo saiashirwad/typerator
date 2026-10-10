@@ -27,10 +27,9 @@ export const env = scoped<Env>(new Map())
 
 const expect = (expr: Expr, expected: Type, label: string) =>
   infer(expr)
-    .flatMap(found => constrain(found, expected))
+    .flatMap(found => constrain(found, expected).recover())
     .context(label)
     .at(expr.span)
-    .recover()
 
 const fields = (entries: readonly (readonly [string, Expr])[]) =>
   check(function*() {
@@ -84,7 +83,7 @@ export const infer = (expr: Expr): Check<Type> => {
         const type = yield* fresh()
         yield* expect(
           expr.record,
-          record({ [expr.label]: type }),
+          record([[expr.label, type]]),
           `field ${expr.label}`
         )
         return type

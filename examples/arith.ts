@@ -6,8 +6,7 @@ import {
   parser,
   precedence,
   recursive,
-  regex,
-  type Parser
+  regex
 } from "parserator"
 import {
   check,
@@ -50,7 +49,7 @@ const Expr = {
   })
 }
 
-const expr: Parser<Expr> = recursive<Expr>(expr => {
+const expr = recursive<Expr>(expr => {
   const atom = located(
     oneOf(
       token(regex(/\d+/)).map(digits => Expr.num(Number(digits))),
@@ -83,7 +82,7 @@ const expr: Parser<Expr> = recursive<Expr>(expr => {
   return oneOf(conditional, operators)
 })
 
-const program = expr.zipLeft(spaces).zipLeft(eof)
+export const program = expr.zipLeft(spaces).zipLeft(eof)
 
 type Type = "int" | "string" | "bool"
 
@@ -92,14 +91,17 @@ const is = (found: Type, expected: Type): Check<void> =>
     ? pure(undefined)
     : fail(`Expected ${expected}, found ${found}`)
 
-const expect = (expr: Expr, expected: Type, label: string) =>
+const expect = (
+  expr: Expr,
+  expected: Type,
+  label: string
+): Check<void> =>
   infer(expr)
-    .flatMap(found => is(found, expected))
+    .flatMap(found => is(found, expected).recover())
     .context(label)
     .at(expr.span)
-    .recover()
 
-const infer = (expr: Expr): Check<Type> => {
+export const infer = (expr: Expr): Check<Type> => {
   switch (expr.kind) {
     case "num":
       return pure("int")
@@ -133,13 +135,17 @@ const infer = (expr: Expr): Check<Type> => {
   }
 }
 
-report(program, expr => run(infer(expr)), type => type, [
-  "1 + 2 == 3",
-  "\"type\" + \"rator\"",
-  "if 1 + 1 == 2 then \"yes\" else \"no\"",
-  "1 + true",
-  "\"a\" + 1",
-  "true + false",
-  "if 1 then 2 else 3",
-  "if true then 1 else \"one\""
-])
+export const typeOf = (expr: Expr) => run(infer(expr))
+
+if (import.meta.main) {
+  report(program, typeOf, type => type, [
+    "1 + 2 == 3",
+    "\"type\" + \"rator\"",
+    "if 1 + 1 == 2 then \"yes\" else \"no\"",
+    "1 + true",
+    "\"a\" + 1",
+    "true + false",
+    "if 1 then 2 else 3",
+    "if true then 1 else \"one\""
+  ])
+}

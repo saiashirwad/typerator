@@ -1,0 +1,185 @@
+fun x -> x
+  : 'a -> 'a
+
+fun x -> x + 1
+  : int -> int
+
+fun f -> fun g -> fun x -> f (g x)
+  : ('a -> 'b) -> ('c -> 'a) -> 'c -> 'b
+
+let id = fun x -> x in if id true then id 1 else 0
+  : int
+
+let twice = fun f -> fun x -> f (f x) in
+let inc = fun n -> n + 1 in
+twice inc 40
+  : int
+
+line 1, column 18:
+> 1 | (fun x -> x + 1) true
+    |                  ^^^^
+Expected int, found bool
+While checking: function argument
+
+line 1, column 4:
+> 1 | if 1 + 2 then 3 else 4
+    |    ^^^^^
+Expected bool, found int
+While checking: if condition
+
+line 1, column 22:
+> 1 | if true then 10 else false
+    |                      ^^^^^
+Expected int, found bool
+While checking: else branch
+
+line 1, column 12:
+> 1 | fun x -> x x
+    |            ^
+Infinite type: 'a occurs in 'a -> 'b
+While checking: function argument
+
+line 1, column 1:
+> 1 | missing 1
+    | ^^^^^^^
+Unbound variable: missing
+
+line 1, column 1:
+> 1 | 1 2
+    | ^
+Expected 'a -> 'b, found int
+While checking: function call
+
+line 1, column 27:
+> 1 | fun f -> let a = f 1 in f true
+    |                           ^^^^
+Expected int, found bool
+While checking: function argument
+
+line 3, column 5:
+  1 | let inc = fun n -> n + 1 in
+  2 | let flag = inc 1 == 2 in
+> 3 | inc flag
+    |     ^^^^
+Expected int, found bool
+While checking: function argument
+
+line 1, column 22:
+> 1 | let f = fun x -> x + true in f false
+    |                      ^^^^
+Expected int, found bool
+While checking: let f > function argument
+
+line 1, column 32:
+> 1 | let f = fun x -> x + true in f false
+    |                                ^^^^^
+Expected int, found bool
+While checking: function argument
+
+line 1, column 12:
+> 1 | let x = 1 x
+    |            ^
+Expected "in"
+
+line 1, column 5:
+> 1 | fun -> 1
+    |     ^
+Expected name, found -
+
+nil
+  : 'a list
+
+cons 1 (cons 2 nil)
+  : int list
+
+map (fun n -> n == 0) (cons 1 (cons 2 nil))
+  : bool list
+
+map (fun n -> pair n true) (cons 1 nil)
+  : (int, bool) pair list
+
+line 1, column 11:
+> 1 | cons true (cons 1 nil)
+    |           ^^^^^^^^^^^^
+Expected bool list, found int list
+While checking: function argument
+
+{ x = 1, y = true }
+  : { x : int, y : bool }
+
+fun r -> r.x
+  : { x : 'a | 'b } -> 'a
+
+fun r -> r.x + r.y
+  : { x : int, y : int | 'a } -> int
+
+fun p -> if p.ok then p.value else 0
+  : { ok : bool, value : int | 'a } -> int
+
+(fun r -> r.x) { x = 1, y = true }
+  : int
+
+let get = fun r -> r.name in get { name = 1, age = 2 } + get { name = 3 }
+  : int
+
+{ point = { x = 1, y = 2 } }.point.y
+  : int
+
+line 1, column 20:
+> 1 | (fun r -> r.x + 1) { y = 2 }
+    |                    ^^^^^^^^^
+Expected { x : int | 'a }, found { y : int }
+While checking: function argument
+
+fun r -> r.x + 1 == r.x
+  : { x : int | 'a } -> bool
+
+let rec fact = fun n -> if n == 0 then 1 else n * fact (n - 1) in fact 5
+  : int
+
+let rec count = fun n ->
+  if n == 0 then 0 else 1 + count (n - 1)
+in count
+  : int -> int
+
+let rec loop = fun x -> loop x in loop
+  : 'a -> 'b
+
+line 1, column 13:
+> 1 | let rec f = fun n -> f true + n in f
+    |             ^^^^^^^^^^^^^^^^^^^
+Expected bool -> int, found int -> int
+While checking: let rec f
+
+(1 : int)
+  : int
+
+fun x -> (x : int)
+  : int -> int
+
+(fun x -> x : 'a -> 'a)
+  : 'a -> 'a
+
+(fun f -> fun x -> f x : ('a -> 'b) -> 'a -> 'b)
+  : ('a -> 'b) -> 'a -> 'b
+
+(fun r -> r.x : { x : int } -> int)
+  : { x : int } -> int
+
+line 1, column 2:
+> 1 | (true : int)
+    |  ^^^^
+Expected int, found bool
+While checking: annotation
+
+line 1, column 2:
+> 1 | (fun x -> x + 1 : int -> bool)
+    |  ^^^^^^^^^^^^^^
+Expected int -> bool, found int -> int
+While checking: annotation
+
+line 1, column 6:
+> 1 | (1 : string)
+    |      ^^^^^^
+Unknown type string
+

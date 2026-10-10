@@ -1,0 +1,48 @@
+fun x -> x
+  : 'a -> 'a
+
+fun x -> { a = x, b = x.f }
+  : 'a & { f : 'b } -> { a : 'a, b : 'b }
+
+fun b -> if b then 1 else true
+  : bool -> int | bool
+
+Some { value = 1 }
+  : Some & { value : int }
+
+fun x -> if x is Some then x.value else 0
+  : { value : 'a } | ~Some -> 'a | int
+
+fun x -> if x is None then 0 else x.value
+  : None | { value : 'a } -> int | 'a
+
+fun x -> if x is Some then x else None
+  : 'a | ~Some -> 'a | None
+
+let get = fun x -> if x is Some then x.value else 0 in get None + get (Some { value = 1 })
+  : int
+
+let id = fun x -> x in { a = id 1, b = id true }
+  : { a : int, b : bool }
+
+fun f -> fun x -> f (f x)
+  : ('a | 'b -> 'c & 'a) -> 'b -> 'c
+
+line 1, column 20:
+> 1 | (fun x -> x.value) None
+    |                    ^^^^
+Expected { value : 'a }, found None
+While checking: function argument
+
+line 1, column 20:
+> 1 | (fun r -> r.x + 1) { y = 2 }
+    |                    ^^^^^^^^^
+Expected { x : 'a }, found { y : int }
+While checking: function argument
+
+line 1, column 5:
+> 1 | 1 + true
+    |     ^^^^
+Expected int, found bool
+While checking: function argument
+

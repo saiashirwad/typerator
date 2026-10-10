@@ -1,4 +1,3 @@
 # typerator
 
-Generator-based combinators for writing type checkers in TypeScript.
-
+Generator-based combinators for writing type checkers in TypeScript

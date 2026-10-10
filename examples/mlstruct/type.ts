@@ -26,10 +26,10 @@ export const tvar = (id: number, level: number): Var => ({
 export const fn = (from: Type, to: Type): Type => ({ kind: "fn", from, to })
 
 export const record = (
-  fields: Readonly<Record<string, Type>> | ReadonlyMap<string, Type>
+  fields: Iterable<readonly [string, Type]>
 ): Type => ({
   kind: "record",
-  fields: fields instanceof Map ? fields : new Map(Object.entries(fields))
+  fields: new Map(fields)
 })
 
 export const tag = (name: string): Type => ({ kind: "tag", name })
@@ -89,7 +89,7 @@ const merge = (types: readonly Type[]): Type[] => {
       ]
       : []),
     ...(records.length && (fields.size || !tagged)
-      ? [record(new Map([...fields].map(([l, all]) => [l, and(...all)])))]
+      ? [record([...fields].map(([l, all]) => [l, and(...all)]))]
       : [])
   ]
   return [...others, ...merged]
